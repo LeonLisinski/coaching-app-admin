@@ -247,7 +247,7 @@ export default async function OverviewPage() {
                   </div>
                 ))}
                 {upcoming.length === 8 && (
-                  <Link href="/finansije" className="block text-center text-xs text-blue-400 hover:text-blue-300 pt-1">
+                  <Link href="/financije" className="block text-center text-xs text-blue-400 hover:text-blue-300 pt-1">
                     Vidi sve →
                   </Link>
                 )}

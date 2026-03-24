@@ -60,7 +60,7 @@ const PLAN_COLORS: Record<string, string> = { starter: '#71717a', pro: '#3b82f6'
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export function FinansijeClient({
+export function FinancijeClient({
   mrr, arr, pipeline, atRiskRevenue, churningRevenue,
   activeCount, trialCount, pastDueCount, lockedCount, canceledCount, churningCount,
   planBreakdown, chartData, atRiskDetails, churningDetails, trialDetails,
@@ -74,7 +74,7 @@ export function FinansijeClient({
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Finansije</h1>
+        <h1 className="text-2xl font-bold">Financije</h1>
         <p className="text-muted-foreground text-sm mt-1">SaaS metrike, prihodi i pregled pretplata</p>
       </div>
 

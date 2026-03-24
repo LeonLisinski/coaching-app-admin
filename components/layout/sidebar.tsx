@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 
 const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
-  { href: '/finansije', label: 'Finansije', icon: BarChart3 },
+  { href: '/financije', label: 'Financije', icon: BarChart3 },
   { href: '/treneri', label: 'Treneri', icon: Users },
   { href: '/expiring', label: 'Expiring Soon', icon: Clock },
   { href: '/support', label: 'Support', icon: MessageSquare, badge: 'support' as const },

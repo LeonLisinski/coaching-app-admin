@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, differenceInDays } from 'date-fns'
-import { Search, ChevronRight, ExternalLink, AlertTriangle, Clock, XCircle } from 'lucide-react'
+import { Search, ChevronRight, ExternalLink, AlertTriangle, Clock, XCircle, Copy, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -256,25 +256,55 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
   )
 }
 
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button onClick={copy} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+      {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+    </button>
+  )
+}
+
 function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
   const now = new Date()
   const ctx = getSubContext(t)
+  const PLAN_PRICES: Record<string, number> = { starter: 29, pro: 59, scale: 99 }
 
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg">{t.full_name}</SheetTitle>
-        <p className="text-sm text-muted-foreground">{t.email}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <SheetTitle className="text-lg leading-tight">{t.full_name}</SheetTitle>
+            <p className="text-sm text-muted-foreground mt-0.5">{t.email}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+            {t.plan && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
+                {PLAN_LABELS[t.plan] ?? t.plan}
+              </span>
+            )}
+            {t.status && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
+                {STATUS_LABELS[t.status] ?? t.status}
+              </span>
+            )}
+          </div>
+        </div>
       </SheetHeader>
 
-      <div className="mt-6 space-y-5 px-0">
-        {/* Status alert */}
+      <div className="mt-5 space-y-4 px-0">
+        {/* Alerts */}
         {t.status === 'past_due' && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
             <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
             <p className="text-sm text-red-300">
-              Plaćanje nije uspjelo.
-              {t.locked_at && ` Lock za ${Math.max(0, differenceInDays(new Date(t.locked_at), now))} dana.`}
+              Plaćanje nije uspjelo.{t.locked_at && ` Zaključava se za ${Math.max(0, differenceInDays(new Date(t.locked_at), now))} dana.`}
             </p>
           </div>
         )}
@@ -288,63 +318,96 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
           <div className="flex items-start gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
             <XCircle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
             <p className="text-sm text-orange-300">
-              Otkazano — pristup do {t.current_period_end ? format(new Date(t.current_period_end), 'd. M. yyyy') : '—'}
+              Otkazao — pristup do {t.current_period_end ? format(new Date(t.current_period_end), 'd. M. yyyy') : '—'}
             </p>
           </div>
         )}
 
-        {/* Info */}
-        <div className="space-y-3">
-          <Row label="ID" value={t.id} mono />
-          <Row label="Registracija" value={format(new Date(t.created_at), 'd. M. yyyy. HH:mm')} />
+        {/* ID + Registracija */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">ID</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-mono text-muted-foreground truncate max-w-[220px]">{t.id}</span>
+              <CopyButton value={t.id} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">Email</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs truncate max-w-[220px]">{t.email}</span>
+              <CopyButton value={t.email} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">Registracija</span>
+            <span className="text-xs">{format(new Date(t.created_at), 'd. M. yyyy. HH:mm')}</span>
+          </div>
         </div>
 
         <Separator />
 
+        {/* Pretplata */}
         <div className="space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pretplata</p>
-          <div className="flex items-center gap-2 flex-wrap">
+
+          {ctx && (
+            <div className={`text-xs font-medium px-2.5 py-1.5 rounded-md border w-fit ${
+              ctx.color.includes('red') ? 'border-red-500/30 bg-red-500/10' :
+              ctx.color.includes('orange') ? 'border-orange-500/30 bg-orange-500/10' :
+              ctx.color.includes('yellow') ? 'border-yellow-500/30 bg-yellow-500/10' :
+              'border-border bg-muted/30'
+            } ${ctx.color}`}>
+              {ctx.label}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            {t.client_limit && (
+              <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
+                <p className="text-xs text-muted-foreground">Limit klijenata</p>
+                <p className="text-lg font-bold mt-0.5">{t.client_limit}</p>
+              </div>
+            )}
             {t.plan && (
-              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
-                {PLAN_LABELS[t.plan] ?? t.plan}
-              </span>
-            )}
-            {t.status && (
-              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
-                {STATUS_LABELS[t.status] ?? t.status}
-              </span>
-            )}
-            {ctx && (
-              <span className={`text-xs font-medium ${ctx.color}`}>{ctx.label}</span>
+              <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
+                <p className="text-xs text-muted-foreground">Cijena</p>
+                <p className="text-lg font-bold mt-0.5">€{PLAN_PRICES[t.plan] ?? '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></p>
+              </div>
             )}
           </div>
 
-          {t.client_limit && <Row label="Limit klijenata" value={String(t.client_limit)} />}
-
-          {t.status === 'trialing' && t.trial_start && (
-            <Row label="Trial start" value={format(new Date(t.trial_start), 'd. M. yyyy')} />
-          )}
-          {t.status === 'trialing' && t.trial_end && (
-            <Row
-              label="Trial end"
-              value={format(new Date(t.trial_end), 'd. M. yyyy')}
-              highlight={differenceInDays(new Date(t.trial_end), now) <= 3 ? 'red' : undefined}
-            />
-          )}
-          {t.current_period_start && (
-            <Row label="Period start" value={format(new Date(t.current_period_start), 'd. M. yyyy')} />
-          )}
-          {t.current_period_end && (
-            <Row label={t.cancel_at_period_end ? 'Pristup do' : 'Sljedeća naplata'}
-              value={format(new Date(t.current_period_end), 'd. M. yyyy')} />
-          )}
-          {t.locked_at && (
-            <Row
-              label="Locked at"
-              value={format(new Date(t.locked_at), 'd. M. yyyy HH:mm')}
-              highlight="red"
-            />
-          )}
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            {t.status === 'trialing' && t.trial_start && (
+              <Row label="Trial počeo" value={format(new Date(t.trial_start), 'd. M. yyyy')} />
+            )}
+            {t.status === 'trialing' && t.trial_end && (
+              <>
+                <Row
+                  label="Trial završava"
+                  value={format(new Date(t.trial_end), 'd. M. yyyy')}
+                  highlight={differenceInDays(new Date(t.trial_end), now) <= 3 ? 'red' : differenceInDays(new Date(t.trial_end), now) <= 7 ? 'yellow' : undefined}
+                />
+                <Row
+                  label="1. naplata"
+                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · €${PLAN_PRICES[t.plan ?? ''] ?? '—'}`}
+                />
+              </>
+            )}
+            {!['trialing'].includes(t.status ?? '') && t.current_period_start && (
+              <Row label="Period počeo" value={format(new Date(t.current_period_start), 'd. M. yyyy')} />
+            )}
+            {t.current_period_end && (
+              <Row
+                label={t.cancel_at_period_end ? 'Pristup do' : 'Sljedeća naplata'}
+                value={format(new Date(t.current_period_end), 'd. M. yyyy')}
+                highlight={t.cancel_at_period_end ? 'yellow' : undefined}
+              />
+            )}
+            {t.locked_at && (
+              <Row label="Zaključan" value={format(new Date(t.locked_at), 'd. M. yyyy HH:mm')} highlight="red" />
+            )}
+          </div>
         </div>
 
         {(t.stripe_customer_id || t.stripe_subscription_id) && (
@@ -352,28 +415,30 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
             <Separator />
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stripe</p>
-              {t.stripe_customer_id && (
-                <a
-                  href={`https://dashboard.stripe.com/customers/${t.stripe_customer_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Otvori Customer u Stripeu
-                </a>
-              )}
-              {t.stripe_subscription_id && (
-                <a
-                  href={`https://dashboard.stripe.com/subscriptions/${t.stripe_subscription_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Otvori Subscription u Stripeu
-                </a>
-              )}
+              <div className="flex flex-col gap-2">
+                {t.stripe_customer_id && (
+                  <a
+                    href={`https://dashboard.stripe.com/customers/${t.stripe_customer_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    Otvori Customer u Stripeu
+                  </a>
+                )}
+                {t.stripe_subscription_id && (
+                  <a
+                    href={`https://dashboard.stripe.com/subscriptions/${t.stripe_subscription_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    Otvori Subscription u Stripeu
+                  </a>
+                )}
+              </div>
             </div>
           </>
         )}

@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, MessageSquare,
-  Mail, Bug, StickyNote, LogOut, Dumbbell, BarChart3,
+  Mail, Bug, StickyNote, LogOut, BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -31,14 +32,18 @@ export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen border-r border-border bg-sidebar shrink-0">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-          <Dumbbell className="w-4 h-4 text-primary-foreground" />
-        </div>
-        <div>
-          <p className="font-semibold text-sm leading-tight">UnitLift</p>
-          <p className="text-xs text-muted-foreground">Admin</p>
-        </div>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+        <Image
+          src="/logo-unitlift.svg"
+          alt="UnitLift"
+          width={80}
+          height={50}
+          className="h-7 w-auto"
+          priority
+        />
+        <span className="text-xs font-medium text-muted-foreground border border-border rounded px-1.5 py-0.5">
+          Admin
+        </span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">

@@ -23,6 +23,17 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-touch-icon.png',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'UnitLift Admin',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    viewportFit: 'cover',
+  },
 };
 
 export default function RootLayout({
@@ -35,7 +46,7 @@ export default function RootLayout({
       lang="hr"
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-background text-foreground" suppressHydrationWarning style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {children}
         <Toaster richColors />
       </body>

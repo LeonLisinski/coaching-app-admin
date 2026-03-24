@@ -42,9 +42,10 @@ export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
           className="h-7 w-auto"
           priority
         />
-        <span className="text-xs font-medium text-muted-foreground border border-border rounded px-1.5 py-0.5">
-          Admin
-        </span>
+        <div className="flex flex-col leading-tight">
+          <span className="text-sm font-semibold">UnitLift</span>
+          <span className="text-[10px] text-muted-foreground">Admin</span>
+        </div>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">

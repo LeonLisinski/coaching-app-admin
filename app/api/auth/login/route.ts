@@ -3,15 +3,21 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { password } = await request.json()
+  const { email, password } = await request.json()
 
-  if (!password) {
-    return NextResponse.json({ error: 'Lozinka je obavezna.' }, { status: 400 })
+  if (!email || !password) {
+    return NextResponse.json({ error: 'Email i lozinka su obavezni.' }, { status: 400 })
   }
 
   const adminEmail = process.env.ADMIN_EMAIL
   if (!adminEmail) {
     return NextResponse.json({ error: 'Serverska greška.' }, { status: 500 })
+  }
+
+  // Server-side provjera emaila — klijent nikad ne zna koji je točan email
+  if (email.toLowerCase().trim() !== adminEmail.toLowerCase()) {
+    // Namjerno isti error kao za krivu lozinku — ne otkrivamo koji dio je kriv
+    return NextResponse.json({ error: 'Neispravni podaci.' }, { status: 401 })
   }
 
   const cookieStore = await cookies()
@@ -36,7 +42,8 @@ export async function POST(request: Request) {
   })
 
   if (error) {
-    return NextResponse.json({ error: 'Neispravna lozinka.' }, { status: 401 })
+    // Uvijek isti error — ne otkrivamo je li email ili lozinka krivo
+    return NextResponse.json({ error: 'Neispravni podaci.' }, { status: 401 })
   }
 
   return NextResponse.json({ ok: true })

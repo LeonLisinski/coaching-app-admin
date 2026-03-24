@@ -9,6 +9,7 @@ import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
 function LoginForm() {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -23,13 +24,13 @@ function LoginForm() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (!password) return
+    if (!email || !password) return
     setLoading(true)
 
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password }),
     })
 
     const data = await res.json()
@@ -65,12 +66,22 @@ function LoginForm() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/20 space-y-5">
-          <div className="text-center">
-            <p className="text-sm font-medium">Admin pristup</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Unesi lozinku za nastavak</p>
-          </div>
-
           <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="email@domena.com"
+                required
+                autoFocus
+                autoComplete="email"
+              />
+            </div>
             <div className="space-y-1.5">
               <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
                 Lozinka
@@ -100,7 +111,7 @@ function LoginForm() {
             <Button
               type="submit"
               className="w-full font-medium"
-              disabled={loading || !password}
+              disabled={loading || !email || !password}
             >
               {loading ? (
                 <span className="flex items-center gap-2">

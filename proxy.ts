@@ -28,12 +28,27 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
+  // Not logged in → redirect to login
   if (!user && pathname !== '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
+  // Logged in but wrong account → force sign out (extra safety net)
+  const adminEmail = process.env.ADMIN_EMAIL
+  if (user && adminEmail && user.email !== adminEmail && pathname !== '/login') {
+    await supabase.auth.signOut()
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('error', 'unauthorized')
+    const response = NextResponse.redirect(url)
+    // Clear auth cookies
+    supabaseResponse.cookies.getAll().forEach(c => response.cookies.delete(c.name))
+    return response
+  }
+
+  // Already logged in → skip login page
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/'

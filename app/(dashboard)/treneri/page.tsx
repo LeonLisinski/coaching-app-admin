@@ -17,9 +17,14 @@ export default async function TreneriPage() {
         plan,
         status,
         current_period_end,
+        current_period_start,
+        trial_start,
         trial_end,
+        locked_at,
         cancel_at_period_end,
-        stripe_customer_id
+        stripe_customer_id,
+        stripe_subscription_id,
+        client_limit
       )
     `)
     .eq('role', 'trainer')
@@ -35,9 +40,14 @@ export default async function TreneriPage() {
       plan: sub?.plan ?? null,
       status: sub?.status ?? null,
       current_period_end: sub?.current_period_end ?? null,
+      current_period_start: sub?.current_period_start ?? null,
+      trial_start: sub?.trial_start ?? null,
       trial_end: sub?.trial_end ?? null,
+      locked_at: sub?.locked_at ?? null,
       cancel_at_period_end: sub?.cancel_at_period_end ?? false,
       stripe_customer_id: sub?.stripe_customer_id ?? null,
+      stripe_subscription_id: sub?.stripe_subscription_id ?? null,
+      client_limit: sub?.client_limit ?? null,
     }
   })
 

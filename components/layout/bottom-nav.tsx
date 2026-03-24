@@ -10,12 +10,13 @@ import {
   Mail,
   Bug,
   StickyNote,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 
 const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/finansije', label: 'Fin.', icon: BarChart3 },
   { href: '/treneri', label: 'Treneri', icon: Users },
   { href: '/expiring', label: 'Expiring', icon: Clock },
   { href: '/support', label: 'Support', icon: MessageSquare, badge: true },
@@ -33,7 +34,7 @@ export function BottomNav({ unreadSupport = 0 }: BottomNavProps) {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-border z-50">
-      <div className="flex items-center justify-around px-1 py-2">
+      <div className="flex items-center justify-around px-1 py-1.5 overflow-x-auto">
         {navItems.map(({ href, label, icon: Icon, badge }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
@@ -41,7 +42,7 @@ export function BottomNav({ unreadSupport = 0 }: BottomNavProps) {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center gap-1 px-2 py-1 rounded-md min-w-0 flex-1 relative',
+                'flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-md min-w-0 flex-1 relative',
                 isActive ? 'text-foreground' : 'text-muted-foreground'
               )}
             >
@@ -53,7 +54,7 @@ export function BottomNav({ unreadSupport = 0 }: BottomNavProps) {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium truncate w-full text-center leading-tight">
+              <span className="text-[9px] font-medium truncate w-full text-center leading-tight">
                 {label}
               </span>
             </Link>

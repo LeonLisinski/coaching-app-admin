@@ -12,6 +12,7 @@ import {
   StickyNote,
   LogOut,
   Dumbbell,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 
 const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/finansije', label: 'Finansije', icon: BarChart3 },
   { href: '/treneri', label: 'Treneri', icon: Users },
   { href: '/expiring', label: 'Expiring Soon', icon: Clock },
   { href: '/support', label: 'Support', icon: MessageSquare, badge: true },
@@ -51,7 +53,7 @@ export function Sidebar({ unreadSupport = 0 }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon, badge }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (

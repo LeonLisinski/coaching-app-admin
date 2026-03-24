@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format } from 'date-fns'
-import { Search, ChevronDown, ExternalLink } from 'lucide-react'
+import { format, differenceInDays } from 'date-fns'
+import { Search, ChevronRight, ExternalLink, AlertTriangle, Clock, XCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
@@ -18,12 +17,17 @@ interface Trainer {
   plan: string | null
   status: string | null
   current_period_end: string | null
+  current_period_start: string | null
+  trial_start: string | null
   trial_end: string | null
+  locked_at: string | null
   cancel_at_period_end: boolean
   stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  client_limit: number | null
 }
 
-function getPlanColor(plan: string | null) {
+function getPlanBadge(plan: string | null) {
   switch (plan) {
     case 'scale': return 'bg-violet-500/20 text-violet-300 border-violet-500/30'
     case 'pro': return 'bg-blue-500/20 text-blue-300 border-blue-500/30'
@@ -32,15 +36,45 @@ function getPlanColor(plan: string | null) {
   }
 }
 
-function getStatusColor(status: string | null) {
+function getStatusBadge(status: string | null) {
   switch (status) {
     case 'active': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-    case 'trialing': return 'bg-sky-500/20 text-sky-300 border-sky-500/30'
-    case 'past_due': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-    case 'canceled': return 'bg-red-500/20 text-red-300 border-red-500/30'
-    case 'locked': return 'bg-red-800/30 text-red-400 border-red-800/30'
+    case 'trialing': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+    case 'past_due': return 'bg-red-500/20 text-red-300 border-red-500/30'
+    case 'canceled': return 'bg-zinc-700/30 text-zinc-400 border-zinc-600/30'
+    case 'locked': return 'bg-red-900/30 text-red-400 border-red-800/30'
     default: return 'bg-zinc-800 text-zinc-400 border-zinc-700'
   }
+}
+
+function getSubContext(t: Trainer): { label: string; color: string } | null {
+  const now = new Date()
+
+  if (t.status === 'trialing' && t.trial_end) {
+    const days = differenceInDays(new Date(t.trial_end), now)
+    if (days < 0) return { label: 'Trial istekao', color: 'text-red-400' }
+    if (days <= 3) return { label: `Trial: ${days}d`, color: 'text-red-400' }
+    if (days <= 7) return { label: `Trial: ${days}d`, color: 'text-yellow-400' }
+    return { label: `Trial: ${days}d`, color: 'text-yellow-300' }
+  }
+
+  if (t.status === 'past_due' && t.locked_at) {
+    const days = differenceInDays(new Date(t.locked_at), now)
+    if (days <= 0) return { label: 'Lock odmah', color: 'text-red-500' }
+    return { label: `Lock za ${days}d`, color: 'text-red-400' }
+  }
+
+  if (t.cancel_at_period_end && t.current_period_end) {
+    const days = differenceInDays(new Date(t.current_period_end), now)
+    return { label: `Otkazuje za ${days}d`, color: 'text-orange-400' }
+  }
+
+  if (t.status === 'active' && t.current_period_end) {
+    const days = differenceInDays(new Date(t.current_period_end), now)
+    if (days <= 5) return { label: `Obnova za ${days}d`, color: 'text-muted-foreground' }
+  }
+
+  return null
 }
 
 export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
@@ -51,23 +85,49 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
 
   const filtered = useMemo(() => {
     return trainers.filter((t) => {
-      const matchSearch =
-        !search ||
-        t.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        t.email.toLowerCase().includes(search.toLowerCase())
+      const q = search.toLowerCase()
+      const matchSearch = !q ||
+        t.full_name.toLowerCase().includes(q) ||
+        t.email.toLowerCase().includes(q)
       const matchPlan = planFilter === 'all' || t.plan === planFilter
       const matchStatus = statusFilter === 'all' || t.status === statusFilter
       return matchSearch && matchPlan && matchStatus
     })
   }, [trainers, search, planFilter, statusFilter])
 
+  const counts = useMemo(() => ({
+    active: trainers.filter(t => t.status === 'active').length,
+    trialing: trainers.filter(t => t.status === 'trialing').length,
+    pastDue: trainers.filter(t => t.status === 'past_due').length,
+    canceled: trainers.filter(t => t.status === 'canceled').length,
+  }), [trainers])
+
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Treneri</h1>
         <p className="text-muted-foreground text-sm mt-1">{trainers.length} ukupno</p>
       </div>
 
+      {/* Status summary */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { label: 'Aktivni', count: counts.active, color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', filter: 'active' },
+          { label: 'Trial', count: counts.trialing, color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', filter: 'trialing' },
+          { label: 'Past Due', count: counts.pastDue, color: 'bg-red-500/20 text-red-300 border-red-500/30', filter: 'past_due' },
+          { label: 'Canceled', count: counts.canceled, color: 'bg-zinc-700/30 text-zinc-400 border-zinc-600/30', filter: 'canceled' },
+        ].map(s => (
+          <button
+            key={s.label}
+            onClick={() => setStatusFilter(statusFilter === s.filter ? 'all' : s.filter)}
+            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-opacity ${s.color} ${statusFilter !== 'all' && statusFilter !== s.filter ? 'opacity-40' : ''}`}
+          >
+            {s.label}: {s.count}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -104,14 +164,16 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
         </Select>
       </div>
 
-      <div className="text-xs text-muted-foreground">{filtered.length} rezultata</div>
+      <p className="text-xs text-muted-foreground">{filtered.length} rezultata</p>
 
       <div className="border border-border rounded-lg overflow-hidden">
-        <div className="hidden md:grid grid-cols-[1fr_1fr_100px_120px_130px] gap-4 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border">
+        {/* Desktop header */}
+        <div className="hidden md:grid grid-cols-[1.5fr_1.5fr_90px_110px_110px_120px] gap-3 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border">
           <span>Ime</span>
           <span>Email</span>
           <span>Plan</span>
           <span>Status</span>
+          <span>Kontekst</span>
           <span>Registracija</span>
         </div>
 
@@ -121,139 +183,223 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {filtered.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelected(t)}
-                className="w-full text-left hover:bg-accent/30 transition-colors"
-              >
-                <div className="hidden md:grid grid-cols-[1fr_1fr_100px_120px_130px] gap-4 px-4 py-3 items-center text-sm">
-                  <span className="font-medium truncate">{t.full_name}</span>
-                  <span className="text-muted-foreground truncate">{t.email}</span>
-                  <span>
-                    {t.plan ? (
-                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanColor(t.plan)}`}>
-                        {PLAN_LABELS[t.plan] ?? t.plan}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </span>
-                  <span>
-                    {t.status ? (
-                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusColor(t.status)}`}>
-                        {STATUS_LABELS[t.status] ?? t.status}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {format(new Date(t.created_at), 'd. M. yyyy')}
-                  </span>
-                </div>
-
-                <div className="md:hidden flex items-center justify-between px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{t.full_name}</p>
-                    <p className="text-muted-foreground text-xs truncate">{t.email}</p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      {t.plan && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${getPlanColor(t.plan)}`}>
+            {filtered.map((t) => {
+              const ctx = getSubContext(t)
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSelected(t)}
+                  className="w-full text-left hover:bg-accent/30 transition-colors"
+                >
+                  {/* Desktop row */}
+                  <div className="hidden md:grid grid-cols-[1.5fr_1.5fr_90px_110px_110px_120px] gap-3 px-4 py-3 items-center text-sm">
+                    <span className="font-medium truncate">{t.full_name}</span>
+                    <span className="text-muted-foreground truncate text-xs">{t.email}</span>
+                    <span>
+                      {t.plan ? (
+                        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
                           {PLAN_LABELS[t.plan] ?? t.plan}
                         </span>
-                      )}
-                      {t.status && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusColor(t.status)}`}>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </span>
+                    <span>
+                      {t.status ? (
+                        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
                           {STATUS_LABELS[t.status] ?? t.status}
                         </span>
-                      )}
-                    </div>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </span>
+                    <span className={`text-xs font-medium ${ctx?.color ?? 'text-muted-foreground'}`}>
+                      {ctx?.label ?? '—'}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      {format(new Date(t.created_at), 'd. M. yyyy')}
+                    </span>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground rotate-[-90deg]" />
-                </div>
-              </button>
-            ))}
+
+                  {/* Mobile row */}
+                  <div className="md:hidden flex items-center justify-between px-4 py-3 gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{t.full_name}</p>
+                      <p className="text-muted-foreground text-xs truncate">{t.email}</p>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {t.plan && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
+                            {PLAN_LABELS[t.plan] ?? t.plan}
+                          </span>
+                        )}
+                        {t.status && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
+                            {STATUS_LABELS[t.status] ?? t.status}
+                          </span>
+                        )}
+                        {ctx && (
+                          <span className={`text-[10px] font-medium ${ctx.color}`}>{ctx.label}</span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
 
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          {selected && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{selected.full_name}</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6 space-y-5">
-                <div className="space-y-3">
-                  <DetailRow label="Email" value={selected.email} />
-                  <DetailRow label="ID" value={selected.id} mono />
-                  <DetailRow
-                    label="Registracija"
-                    value={format(new Date(selected.created_at), 'd. M. yyyy. HH:mm')}
-                  />
-                </div>
-                <Separator />
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pretplata</p>
-                  <div className="flex items-center gap-2">
-                    {selected.plan ? (
-                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanColor(selected.plan)}`}>
-                        {PLAN_LABELS[selected.plan] ?? selected.plan}
-                      </span>
-                    ) : <span className="text-muted-foreground text-sm">—</span>}
-                    {selected.status ? (
-                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusColor(selected.status)}`}>
-                        {STATUS_LABELS[selected.status] ?? selected.status}
-                      </span>
-                    ) : null}
-                  </div>
-                  {selected.current_period_end && (
-                    <DetailRow
-                      label="Kraj perioda"
-                      value={format(new Date(selected.current_period_end), 'd. M. yyyy')}
-                    />
-                  )}
-                  {selected.trial_end && (
-                    <DetailRow
-                      label="Kraj triala"
-                      value={format(new Date(selected.trial_end), 'd. M. yyyy')}
-                    />
-                  )}
-                  {selected.cancel_at_period_end && (
-                    <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-3 py-2">
-                      ⚠ Otkazan — istječe na kraju perioda
-                    </p>
-                  )}
-                  {selected.stripe_customer_id && (
-                    <a
-                      href={`https://dashboard.stripe.com/customers/${selected.stripe_customer_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      Stripe Dashboard
-                    </a>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+          {selected && <TrainerDetail trainer={selected} />}
         </SheetContent>
       </Sheet>
     </div>
   )
 }
 
-function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
+  const now = new Date()
+  const ctx = getSubContext(t)
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle className="text-lg">{t.full_name}</SheetTitle>
+        <p className="text-sm text-muted-foreground">{t.email}</p>
+      </SheetHeader>
+
+      <div className="mt-6 space-y-5 px-0">
+        {/* Status alert */}
+        {t.status === 'past_due' && (
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-red-300">
+              Plaćanje nije uspjelo.
+              {t.locked_at && ` Lock za ${Math.max(0, differenceInDays(new Date(t.locked_at), now))} dana.`}
+            </p>
+          </div>
+        )}
+        {t.status === 'locked' && (
+          <div className="flex items-start gap-2 bg-red-900/20 border border-red-800/30 rounded-lg p-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-red-400">Račun je zaključan. Trener nema pristup.</p>
+          </div>
+        )}
+        {t.cancel_at_period_end && (
+          <div className="flex items-start gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+            <XCircle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-orange-300">
+              Otkazano — pristup do {t.current_period_end ? format(new Date(t.current_period_end), 'd. M. yyyy') : '—'}
+            </p>
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="space-y-3">
+          <Row label="ID" value={t.id} mono />
+          <Row label="Registracija" value={format(new Date(t.created_at), 'd. M. yyyy. HH:mm')} />
+        </div>
+
+        <Separator />
+
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pretplata</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {t.plan && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
+                {PLAN_LABELS[t.plan] ?? t.plan}
+              </span>
+            )}
+            {t.status && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
+                {STATUS_LABELS[t.status] ?? t.status}
+              </span>
+            )}
+            {ctx && (
+              <span className={`text-xs font-medium ${ctx.color}`}>{ctx.label}</span>
+            )}
+          </div>
+
+          {t.client_limit && <Row label="Limit klijenata" value={String(t.client_limit)} />}
+
+          {t.status === 'trialing' && t.trial_start && (
+            <Row label="Trial start" value={format(new Date(t.trial_start), 'd. M. yyyy')} />
+          )}
+          {t.status === 'trialing' && t.trial_end && (
+            <Row
+              label="Trial end"
+              value={format(new Date(t.trial_end), 'd. M. yyyy')}
+              highlight={differenceInDays(new Date(t.trial_end), now) <= 3 ? 'red' : undefined}
+            />
+          )}
+          {t.current_period_start && (
+            <Row label="Period start" value={format(new Date(t.current_period_start), 'd. M. yyyy')} />
+          )}
+          {t.current_period_end && (
+            <Row label={t.cancel_at_period_end ? 'Pristup do' : 'Sljedeća naplata'}
+              value={format(new Date(t.current_period_end), 'd. M. yyyy')} />
+          )}
+          {t.locked_at && (
+            <Row
+              label="Locked at"
+              value={format(new Date(t.locked_at), 'd. M. yyyy HH:mm')}
+              highlight="red"
+            />
+          )}
+        </div>
+
+        {(t.stripe_customer_id || t.stripe_subscription_id) && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stripe</p>
+              {t.stripe_customer_id && (
+                <a
+                  href={`https://dashboard.stripe.com/customers/${t.stripe_customer_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Otvori Customer u Stripeu
+                </a>
+              )}
+              {t.stripe_subscription_id && (
+                <a
+                  href={`https://dashboard.stripe.com/subscriptions/${t.stripe_subscription_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Otvori Subscription u Stripeu
+                </a>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
+function Row({ label, value, mono, highlight }: {
+  label: string
+  value: string
+  mono?: boolean
+  highlight?: 'red' | 'yellow'
+}) {
+  const valueClass = highlight === 'red'
+    ? 'text-red-400'
+    : highlight === 'yellow'
+    ? 'text-yellow-400'
+    : mono
+    ? 'font-mono text-xs text-muted-foreground'
+    : 'text-sm'
+
   return (
     <div className="flex justify-between items-start gap-4">
       <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-sm text-right break-all ${mono ? 'font-mono text-xs' : ''}`}>
-        {value}
-      </span>
+      <span className={`text-right break-all ${valueClass}`}>{value}</span>
     </div>
   )
 }

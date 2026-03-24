@@ -3,13 +3,10 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
-
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? 'leon@unitlift.com'
 
 function LoginForm() {
   const [password, setPassword] = useState('')
@@ -20,7 +17,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (searchParams.get('error') === 'unauthorized') {
-      toast.error('Pristup odbijen — neautoriziran račun.')
+      toast.error('Pristup odbijen.')
     }
   }, [searchParams])
 
@@ -29,14 +26,16 @@ function LoginForm() {
     if (!password) return
     setLoading(true)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({
-      email: ADMIN_EMAIL,
-      password,
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
     })
 
-    if (error) {
-      toast.error('Neispravna lozinka.')
+    const data = await res.json()
+
+    if (!res.ok) {
+      toast.error(data.error ?? 'Neispravna lozinka.')
       setLoading(false)
       return
     }
@@ -47,11 +46,9 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      {/* Subtle grid background */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,oklch(1_0_0/3%)_1px,transparent_1px),linear-gradient(to_bottom,oklch(1_0_0/3%)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
       <div className="relative w-full max-w-xs px-4 space-y-8">
-        {/* Logo */}
         <div className="flex flex-col items-center gap-3">
           <Image
             src="/logo-unitlift.svg"
@@ -67,18 +64,10 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Login card */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/20 space-y-5">
-          {/* Who is logging in */}
-          <div className="flex items-center gap-3 bg-muted/40 border border-border rounded-xl px-3.5 py-2.5">
-            <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-blue-400">L</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium leading-tight">Leon Lišinski</p>
-              <p className="text-xs text-muted-foreground truncate">{ADMIN_EMAIL}</p>
-            </div>
-            <Lock className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 ml-auto" />
+          <div className="text-center">
+            <p className="text-sm font-medium">Admin pristup</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Unesi lozinku za nastavak</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">

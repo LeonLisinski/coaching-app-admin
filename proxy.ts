@@ -28,6 +28,12 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
+  // Auth API routes are always public (login flow itself)
+  const publicApiRoutes = ['/api/auth/login', '/api/auth/verify-mfa', '/api/auth/signout']
+  if (publicApiRoutes.includes(pathname)) {
+    return supabaseResponse
+  }
+
   // Not logged in → redirect to login
   if (!user && pathname !== '/login') {
     const url = request.nextUrl.clone()

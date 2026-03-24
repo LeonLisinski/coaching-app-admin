@@ -9,29 +9,24 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
-const navItems = [
+const internalNavItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/financije', label: 'Financije', icon: BarChart3 },
   { href: '/treneri', label: 'Treneri', icon: Users },
   { href: '/expiring', label: 'Expiring Soon', icon: Clock },
-  { href: '/support', label: 'Support', icon: MessageSquare, badge: 'support' as const },
   { href: '/mailer', label: 'Mailer', icon: Mail },
   { href: '/bugovi', label: 'Bug Log', icon: Bug, badge: 'bugs' as const },
   { href: '/notes', label: 'Notes', icon: StickyNote },
 ]
 
-export function Sidebar({ unreadSupport = 0, highBugs = 0 }: { unreadSupport?: number; highBugs?: number }) {
+const GMAIL_URL = 'https://mail.google.com/a/unitlift.com/'
+
+export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
   const pathname = usePathname()
 
   async function handleSignOut() {
     await fetch('/api/auth/signout', { method: 'POST' })
     window.location.href = '/login'
-  }
-
-  function getBadgeCount(badge?: 'support' | 'bugs') {
-    if (badge === 'support') return unreadSupport
-    if (badge === 'bugs') return highBugs
-    return 0
   }
 
   return (
@@ -47,9 +42,9 @@ export function Sidebar({ unreadSupport = 0, highBugs = 0 }: { unreadSupport?: n
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map(({ href, label, icon: Icon, badge }) => {
+        {internalNavItems.map(({ href, label, icon: Icon, badge }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
-          const count = getBadgeCount(badge)
+          const count = badge === 'bugs' ? highBugs : 0
           return (
             <Link
               key={href}
@@ -64,15 +59,25 @@ export function Sidebar({ unreadSupport = 0, highBugs = 0 }: { unreadSupport?: n
               <Icon className="w-4 h-4 shrink-0" />
               <span className="flex-1">{label}</span>
               {count > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
-                  badge === 'bugs' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
-                }`}>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center bg-red-500 text-white">
                   {count > 9 ? '9+' : count}
                 </span>
               )}
             </Link>
           )
         })}
+
+        {/* Gmail — external link */}
+        <a
+          href={GMAIL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        >
+          <MessageSquare className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Support</span>
+          <span className="text-[9px] text-muted-foreground/60">↗</span>
+        </a>
       </nav>
 
       <div className="px-3 py-4 border-t border-border">

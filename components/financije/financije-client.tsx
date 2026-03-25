@@ -306,7 +306,7 @@ export function FinancijeClient({
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="historija">Historija</TabsTrigger>
+          <TabsTrigger value="povijest">Povijest</TabsTrigger>
         </TabsList>
 
         {/* Trial tab — full detail */}
@@ -459,82 +459,63 @@ export function FinancijeClient({
           )}
         </TabsContent>
 
-        {/* Historija */}
-        <TabsContent value="historija" className="mt-4">
+        {/* Povijest */}
+        <TabsContent value="povijest" className="mt-4">
           <div className="space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">Historija po mjesecima (zadnje 24 mj.)</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  MRR je procjena na osnovu pretplata aktivnih krajem tog mjeseca · Churn = datum otkazivanja
-                </p>
-              </div>
-            </div>
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/40 border-b border-border text-xs text-muted-foreground">
-                      <th className="text-left px-4 py-2.5 font-medium">Mjesec</th>
-                      <th className="text-center px-3 py-2.5 font-medium">Novi</th>
-                      <th className="text-center px-3 py-2.5 font-medium">Churn</th>
-                      <th className="text-center px-3 py-2.5 font-medium">Net</th>
-                      <th className="text-center px-3 py-2.5 font-medium">Aktivnih</th>
-                      <th className="text-right px-4 py-2.5 font-medium">MRR (est.)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[...historyData].reverse().map((row, i) => {
-                      const net = row.new - row.churned
-                      const isCurrentMonth = i === 0
-                      return (
-                        <tr
-                          key={row.month}
-                          className={`transition-colors ${isCurrentMonth ? 'bg-blue-500/5 border-l-2 border-l-blue-500' : 'hover:bg-muted/20'}`}
-                        >
-                          <td className="px-4 py-3 font-medium text-sm">
-                            {row.month}
-                            {isCurrentMonth && (
-                              <span className="ml-2 text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded">
-                                trenutni
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            {row.new > 0 ? (
-                              <span className="text-emerald-400 font-semibold">+{row.new}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            {row.churned > 0 ? (
-                              <span className="text-red-400 font-semibold">-{row.churned}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center font-mono text-xs">
-                            <span className={net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-muted-foreground'}>
-                              {net > 0 ? `+${net}` : net === 0 ? '0' : net}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-center font-mono text-xs text-muted-foreground">
-                            {row.active}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold">
-                            {row.mrr > 0 ? (
-                              <span className="text-blue-400">€{row.mrr.toLocaleString()}</span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">€0</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            <p className="text-xs text-muted-foreground">
+              MRR je procjena — rekonstruira se iz pretplata aktivnih krajem tog mjeseca. Churn = datum otkazivanja.
+            </p>
+            <div className="border border-border rounded-lg divide-y divide-border">
+              {[...historyData].reverse().map((row, i) => {
+                const net = row.new - row.churned
+                const isCurrentMonth = i === 0
+                return (
+                  <div
+                    key={row.month}
+                    className={`flex items-center gap-3 px-4 py-3 ${isCurrentMonth ? 'bg-blue-500/5' : 'hover:bg-muted/20'}`}
+                  >
+                    {/* Month label */}
+                    <div className="w-20 shrink-0">
+                      <p className="text-sm font-semibold">{row.month}</p>
+                      {isCurrentMonth && (
+                        <span className="text-[9px] text-blue-400 font-medium">trenutni</span>
+                      )}
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="flex-1 flex items-center gap-4 min-w-0 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">Novi</span>
+                        <span className={`text-xs font-bold ${row.new > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+                          {row.new > 0 ? `+${row.new}` : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">Churn</span>
+                        <span className={`text-xs font-bold ${row.churned > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                          {row.churned > 0 ? `-${row.churned}` : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">Aktivnih</span>
+                        <span className="text-xs text-foreground font-medium">{row.active}</span>
+                      </div>
+                    </div>
+
+                    {/* MRR */}
+                    <div className="shrink-0 text-right">
+                      <p className={`text-sm font-bold ${row.mrr > 0 ? 'text-blue-400' : 'text-muted-foreground'}`}>
+                        €{row.mrr.toLocaleString()}
+                      </p>
+                      {net !== 0 && (
+                        <p className={`text-[10px] font-medium ${net > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          net {net > 0 ? `+${net}` : net}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </TabsContent>

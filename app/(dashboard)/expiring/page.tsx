@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { format, differenceInDays, addDays } from 'date-fns'
 import { Card } from '@/components/ui/card'
 import { PLAN_LABELS } from '@/lib/config'
@@ -28,7 +28,7 @@ function getPlanBadge(plan: string | null) {
 }
 
 export default async function ExpiringPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const now = new Date()
   const in14Days = addDays(now, 14).toISOString()
   const in7Days = addDays(now, 7).toISOString()

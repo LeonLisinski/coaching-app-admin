@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { Sidebar } from '@/components/layout/sidebar'
 import { BottomNav } from '@/components/layout/bottom-nav'
 
 async function getHighBugCount() {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { count } = await supabase
       .from('bug_log')
       .select('*', { count: 'exact', head: true })

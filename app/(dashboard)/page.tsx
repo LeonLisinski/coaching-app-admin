@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PLAN_PRICES, PLAN_LABELS } from '@/lib/config'
 import { RevenueChart } from '@/components/overview/revenue-chart'
@@ -12,7 +12,7 @@ import { format, startOfMonth, subMonths, addDays, differenceInDays } from 'date
 import Link from 'next/link'
 
 export default async function OverviewPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const now = new Date()
   const monthStart = startOfMonth(now).toISOString()
   const in30Days = addDays(now, 30).toISOString()

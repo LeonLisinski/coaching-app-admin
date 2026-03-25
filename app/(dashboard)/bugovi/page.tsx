@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { BugoviClient } from '@/components/bugovi/bugovi-client'
 
 export default async function BugoviPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: bugs } = await supabase
     .from('bug_log')

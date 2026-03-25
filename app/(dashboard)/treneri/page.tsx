@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { TreneriClient } from '@/components/treneri/treneri-client'
 
 export default async function TreneriPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: trainers } = await supabase
     .from('profiles')

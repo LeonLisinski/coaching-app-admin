@@ -1,12 +1,12 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { PLAN_PRICES, PLAN_LABELS } from '@/lib/config'
 import { FinancijeClient } from '@/components/financije/financije-client'
 import { differenceInDays, endOfMonth, format, startOfMonth, subMonths, addDays } from 'date-fns'
 
 export default async function FinancijePage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const now = new Date()
   const in30Days = addDays(now, 30).toISOString()
 

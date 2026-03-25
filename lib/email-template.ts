@@ -7,7 +7,7 @@ export function buildEmailHtml({
   subject: string
   body: string
 }) {
-  const greeting = recipientName ? `Dragi/a ${recipientName},` : 'Dragi/a treneru,'
+  const greeting = recipientName ? `Bok ${recipientName},` : 'Bok,'
   const bodyHtml = body
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

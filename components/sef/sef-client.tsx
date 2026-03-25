@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
 type Category = 'link' | 'auth' | 'api' | 'note'
@@ -150,7 +149,7 @@ export function SefClient({ initialItems }: { initialItems: VaultItem[] }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Šef</h1>
+          <h1 className="text-2xl font-bold">Sef</h1>
           <p className="text-muted-foreground text-sm mt-1">Linkovi, prijave, API ključevi i napomene</p>
         </div>
         <Button onClick={openAdd} size="sm" className="shrink-0">
@@ -224,83 +223,107 @@ export function SefClient({ initialItems }: { initialItems: VaultItem[] }) {
       {/* Add/Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="pb-4">
-            <SheetTitle>{editItem ? 'Uredi unos' : 'Novi unos'}</SheetTitle>
+          <SheetHeader className="pb-5 border-b border-border">
+            <SheetTitle className="text-lg">{editItem ? 'Uredi unos' : 'Novi unos'}</SheetTitle>
           </SheetHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Kategorija</Label>
-              <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as Category }))}>
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => (
-                    <SelectItem key={c.value} value={c.value}>
-                      <span className="flex items-center gap-2">
-                        <c.icon className="w-3.5 h-3.5" />
-                        {c.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+          <div className="space-y-5 pt-5">
+            {/* Category picker */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kategorija</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {CATEGORIES.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, category: c.value }))}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      form.category === c.value
+                        ? `${c.color} ring-1 ring-current`
+                        : 'border-border text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground'
+                    }`}
+                  >
+                    <c.icon className="w-4 h-4 shrink-0" />
+                    {c.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <Label>Naziv *</Label>
+
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Naziv <span className="text-red-400">*</span>
+              </Label>
               <Input
-                className="mt-1.5"
-                placeholder="npr. Vercel, Stripe Dashboard..."
+                placeholder="npr. Vercel, Stripe Dashboard, Resend..."
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                autoFocus
               />
             </div>
-            <div>
-              <Label>URL</Label>
+
+            {/* URL */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">URL</Label>
               <Input
-                className="mt-1.5"
                 placeholder="https://..."
                 value={form.url}
                 onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
               />
             </div>
+
+            {/* Auth/API fields */}
             {(form.category === 'auth' || form.category === 'api') && (
-              <>
-                <div>
-                  <Label>{form.category === 'api' ? 'Naziv ključa / email' : 'Korisničko ime / email'}</Label>
+              <div className="space-y-3 p-3 rounded-lg bg-muted/30 border border-border">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {form.category === 'api' ? 'API detalji' : 'Podaci za prijavu'}
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {form.category === 'api' ? 'Ime / email / opis' : 'Korisničko ime / email'}
+                  </Label>
                   <Input
-                    className="mt-1.5"
                     value={form.username}
                     onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <Label>{form.category === 'api' ? 'API ključ' : 'Lozinka'}</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {form.category === 'api' ? 'API ključ / secret' : 'Lozinka'}
+                  </Label>
                   <Input
-                    className="mt-1.5"
                     type="password"
                     placeholder="••••••••"
                     value={form.password}
                     onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                   />
                 </div>
-              </>
+              </div>
             )}
-            <div>
-              <Label>Napomene</Label>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Napomene</Label>
               <Textarea
-                className="mt-1.5 resize-none"
+                className="resize-none"
                 rows={3}
-                placeholder="Bilo što korisno..."
+                placeholder="Bilo što korisno — plan, upute, linkovi..."
                 value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleSave} disabled={saving || !form.title.trim()} className="flex-1">
-                {saving ? 'Sprema...' : editItem ? 'Spremi izmjene' : 'Dodaj'}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                onClick={handleSave}
+                disabled={saving || !form.title.trim()}
+                className="flex-1"
+              >
+                {saving ? 'Sprema...' : editItem ? 'Spremi izmjene' : 'Dodaj unos'}
               </Button>
-              <Button variant="outline" onClick={() => setSheetOpen(false)}>
+              <Button variant="outline" size="icon" onClick={() => setSheetOpen(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

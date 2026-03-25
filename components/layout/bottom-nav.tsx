@@ -16,7 +16,7 @@ const internalNavItems = [
   { href: '/mailer', label: 'Mailer', icon: Mail },
   { href: '/bugovi', label: 'Bugovi', icon: Bug, isBug: true },
   { href: '/notes', label: 'Notes', icon: StickyNote },
-  { href: '/sef', label: 'Šef', icon: Vault },
+  { href: '/sef', label: 'Sef', icon: Vault },
 ]
 
 const GMAIL_URL = 'https://mail.google.com/a/unitlift.com/'

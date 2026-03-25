@@ -18,7 +18,7 @@ const internalNavItems = [
   { href: '/mailer', label: 'Mailer', icon: Mail },
   { href: '/bugovi', label: 'Bug Log', icon: Bug, badge: 'bugs' as const },
   { href: '/notes', label: 'Notes', icon: StickyNote },
-  { href: '/sef', label: 'Šef', icon: Vault },
+  { href: '/sef', label: 'Sef', icon: Vault },
   { href: '/postavke', label: 'Postavke', icon: Settings },
 ]
 

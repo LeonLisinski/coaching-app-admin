@@ -51,13 +51,11 @@ export function buildEmailHtml({
           <tr>
             <td style="padding:24px 0 0 0;text-align:center;">
               <p style="margin:0 0 6px 0;color:#9ca3af;font-size:12px;">
-                Problemi? Kontaktiraj nas na
-                <a href="mailto:leon@unitlift.com" style="color:#2563eb;text-decoration:none;">leon@unitlift.com</a>
+                <a href="https://unitlift.com" style="color:#2563eb;text-decoration:none;">unitlift.com</a>
+                &nbsp;·&nbsp;
+                <a href="https://app.unitlift.com" style="color:#2563eb;text-decoration:none;">app.unitlift.com</a>
               </p>
-              <p style="margin:0;color:#9ca3af;font-size:12px;">
-                © 2026 UnitLift ·
-                <a href="https://unitlift.com" style="color:#9ca3af;text-decoration:underline;">unitlift.com</a>
-              </p>
+              <p style="margin:0;color:#9ca3af;font-size:12px;">© 2026 UnitLift</p>
             </td>
           </tr>
 

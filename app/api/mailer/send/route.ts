@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase-admin'
+import { buildEmailHtml } from '@/lib/email-template'
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
         from: `UnitLift <${fromEmail}>`,
         to: r.email!,
         subject,
+        html: buildEmailHtml({ recipientName: r.name, subject, body }),
         text: body,
       })
     )

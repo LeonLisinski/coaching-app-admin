@@ -30,11 +30,15 @@ export function buildEmailHtml({
 
           <!-- Logo header -->
           <tr>
-            <td align="center" style="padding-bottom:24px;">
-              <a href="https://unitlift.com" style="text-decoration:none;">
-                <div style="display:inline-block;background-color:#2563eb;border-radius:10px;padding:12px 24px;">
-                  <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">UnitLift</span>
-                </div>
+            <td align="center" style="padding-bottom:28px;">
+              <a href="https://unitlift.com" style="text-decoration:none;display:inline-block;">
+                <img
+                  src="https://admin.unitlift.com/logo-unitlift.svg"
+                  alt="UnitLift"
+                  width="120"
+                  height="auto"
+                  style="display:block;height:auto;"
+                />
               </a>
             </td>
           </tr>

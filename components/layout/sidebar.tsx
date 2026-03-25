@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, MessageSquare,
-  Mail, Bug, StickyNote, LogOut, BarChart3, Settings,
+  Mail, Bug, StickyNote, LogOut, BarChart3, Settings, Vault,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ const internalNavItems = [
   { href: '/mailer', label: 'Mailer', icon: Mail },
   { href: '/bugovi', label: 'Bug Log', icon: Bug, badge: 'bugs' as const },
   { href: '/notes', label: 'Notes', icon: StickyNote },
+  { href: '/sef', label: 'Šef', icon: Vault },
   { href: '/postavke', label: 'Postavke', icon: Settings },
 ]
 

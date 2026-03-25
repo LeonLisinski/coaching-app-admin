@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase-server'
 import { PLAN_PRICES, PLAN_LABELS } from '@/lib/config'
 import { FinancijeClient } from '@/components/financije/financije-client'
-import { differenceInDays, format, subMonths, addDays } from 'date-fns'
+import { differenceInDays, endOfMonth, format, startOfMonth, subMonths, addDays } from 'date-fns'
 
 export default async function FinancijePage() {
   const supabase = await createClient()
@@ -112,6 +112,8 @@ export default async function FinancijePage() {
     return { trainer_id: s.trainer_id, full_name: profile?.full_name ?? '—', email: profile?.email ?? '—', plan: s.plan, trial_start: s.trial_start, trial_end: s.trial_end, daysLeft, daysUsed, trialDuration, firstChargeDate: s.trial_end, firstChargeAmount: PLAN_PRICES[s.plan] ?? 0 }
   }).sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))
 
+  const historyData = buildMonthlyHistory(allSubs)
+
   return (
     <FinancijeClient
       mrr={mrr} arr={arr} pipeline={pipeline}
@@ -123,6 +125,51 @@ export default async function FinancijePage() {
       atRiskDetails={atRiskDetails} churningDetails={churningDetails}
       trialDetails={trialDetails} upcomingEvents={upcoming}
       upcomingRevenue={upcomingRevenue}
+      historyData={historyData}
     />
   )
+}
+
+type SubRecord = {
+  plan: string; status: string; created_at: string; updated_at: string;
+  trial_end: string | null;
+}
+
+function buildMonthlyHistory(subs: SubRecord[]) {
+  const now = new Date()
+  const result = []
+
+  for (let i = 23; i >= 0; i--) {
+    const monthDate = subMonths(now, i)
+    const monthEnd = endOfMonth(monthDate)
+    const monthStart = startOfMonth(monthDate)
+
+    // Subscriptions that existed and were not-yet-canceled at end of this month
+    const activeAtEnd = subs.filter(s => {
+      if (new Date(s.created_at) > monthEnd) return false
+      if (s.status === 'canceled') return new Date(s.updated_at) > monthEnd
+      return true
+    })
+
+    // Paying (not trialing) at end of month: trial_end was before or at monthEnd
+    const paying = activeAtEnd.filter(s => {
+      if (!s.trial_end) return true
+      return new Date(s.trial_end) <= monthEnd
+    })
+
+    const mrr = paying.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+    const newCount = subs.filter(s => {
+      const d = new Date(s.created_at)
+      return d >= monthStart && d <= monthEnd
+    }).length
+    const churnCount = subs.filter(s => {
+      if (s.status !== 'canceled') return false
+      const d = new Date(s.updated_at)
+      return d >= monthStart && d <= monthEnd
+    }).length
+
+    result.push({ month: format(monthDate, 'MMM yyyy'), new: newCount, churned: churnCount, active: activeAtEnd.length, mrr })
+  }
+
+  return result
 }

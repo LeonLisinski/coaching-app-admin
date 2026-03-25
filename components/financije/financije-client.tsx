@@ -19,6 +19,8 @@ interface ChurningRow { trainer_id: string; full_name: string; email: string; pl
 interface TrialRow { trainer_id: string; full_name: string; email: string; plan: string; trial_start: string | null; trial_end: string | null; daysLeft: number | null; daysUsed: number | null; trialDuration: number; firstChargeDate: string | null; firstChargeAmount: number }
 interface UpcomingItem { date: string; trainer_id: string; full_name: string; email: string; plan: string; type: 'trial_converts' | 'renewal' | 'cancels' | 'locks'; amount: number; daysLeft: number; extra?: string }
 
+interface HistoryRow { month: string; new: number; churned: number; active: number; mrr: number }
+
 interface Props {
   mrr: number; arr: number; pipeline: number; atRiskRevenue: number; churningRevenue: number
   activeCount: number; trialCount: number; pastDueCount: number; lockedCount: number; canceledCount: number; churningCount: number
@@ -29,6 +31,7 @@ interface Props {
   trialDetails: TrialRow[]
   upcomingEvents: UpcomingItem[]
   upcomingRevenue: number
+  historyData: HistoryRow[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -64,7 +67,7 @@ export function FinancijeClient({
   mrr, arr, pipeline, atRiskRevenue, churningRevenue,
   activeCount, trialCount, pastDueCount, lockedCount, canceledCount, churningCount,
   planBreakdown, chartData, atRiskDetails, churningDetails, trialDetails,
-  upcomingEvents, upcomingRevenue,
+  upcomingEvents, upcomingRevenue, historyData,
 }: Props) {
 
   const totalActive = activeCount + trialCount
@@ -278,7 +281,7 @@ export function FinancijeClient({
 
       {/* Detalji tabovi */}
       <Tabs defaultValue="trial">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="trial">
             Besplatni trial
             {trialCount > 0 && (
@@ -303,6 +306,7 @@ export function FinancijeClient({
               </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="historija">Historija</TabsTrigger>
         </TabsList>
 
         {/* Trial tab — full detail */}
@@ -453,6 +457,86 @@ export function FinancijeClient({
               ))}
             </div>
           )}
+        </TabsContent>
+
+        {/* Historija */}
+        <TabsContent value="historija" className="mt-4">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Historija po mjesecima (zadnje 24 mj.)</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  MRR je procjena na osnovu pretplata aktivnih krajem tog mjeseca · Churn = datum otkazivanja
+                </p>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border text-xs text-muted-foreground">
+                      <th className="text-left px-4 py-2.5 font-medium">Mjesec</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Novi</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Churn</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Net</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Aktivnih</th>
+                      <th className="text-right px-4 py-2.5 font-medium">MRR (est.)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[...historyData].reverse().map((row, i) => {
+                      const net = row.new - row.churned
+                      const isCurrentMonth = i === 0
+                      return (
+                        <tr
+                          key={row.month}
+                          className={`transition-colors ${isCurrentMonth ? 'bg-blue-500/5 border-l-2 border-l-blue-500' : 'hover:bg-muted/20'}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-sm">
+                            {row.month}
+                            {isCurrentMonth && (
+                              <span className="ml-2 text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded">
+                                trenutni
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            {row.new > 0 ? (
+                              <span className="text-emerald-400 font-semibold">+{row.new}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            {row.churned > 0 ? (
+                              <span className="text-red-400 font-semibold">-{row.churned}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-center font-mono text-xs">
+                            <span className={net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-muted-foreground'}>
+                              {net > 0 ? `+${net}` : net === 0 ? '0' : net}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center font-mono text-xs text-muted-foreground">
+                            {row.active}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold">
+                            {row.mrr > 0 ? (
+                              <span className="text-blue-400">€{row.mrr.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">€0</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

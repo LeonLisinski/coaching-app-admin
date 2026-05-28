@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createAdminClient } from '@/lib/supabase-admin'
-import { PLAN_PRICES, PLAN_LABELS } from '@/lib/config'
+import { PLAN_PRICES, PLAN_LABELS, effectivePrice } from '@/lib/config'
 import { FinancijeClient } from '@/components/financije/financije-client'
 import { differenceInDays, endOfMonth, format, startOfMonth, subMonths, addDays } from 'date-fns'
 
@@ -18,6 +18,7 @@ export default async function FinancijePage() {
       trial_start, trial_end,
       locked_at, cancel_at_period_end,
       created_at, updated_at,
+      promo_granted_at, promo_ends_at, promo_lost_at,
       profiles:trainer_id ( full_name, email )
     `)
     .order('created_at', { ascending: false })
@@ -31,18 +32,18 @@ export default async function FinancijePage() {
   const lockedSubs   = allSubs.filter(s => s.status === 'locked')
   const churning     = allSubs.filter(s => s.cancel_at_period_end && (s.status === 'active' || s.status === 'trialing'))
 
-  const mrr             = activeSubs.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+  const mrr             = activeSubs.reduce((sum, s) => sum + effectivePrice(s), 0)
   const arr             = mrr * 12
-  const pipeline        = trialSubs.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
-  const atRiskRevenue   = pastDueSubs.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
-  const churningRevenue = churning.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+  const pipeline        = trialSubs.reduce((sum, s) => sum + effectivePrice(s), 0)
+  const atRiskRevenue   = pastDueSubs.reduce((sum, s) => sum + effectivePrice(s), 0)
+  const churningRevenue = churning.reduce((sum, s) => sum + effectivePrice(s), 0)
 
   const planBreakdown = ['starter', 'pro', 'scale'].map(plan => ({
     plan,
     label: PLAN_LABELS[plan],
     active:   activeSubs.filter(s => s.plan === plan).length,
     trialing: trialSubs.filter(s => s.plan === plan).length,
-    revenue:  activeSubs.filter(s => s.plan === plan).length * (PLAN_PRICES[plan] ?? 0),
+    revenue:  activeSubs.filter(s => s.plan === plan).reduce((sum, s) => sum + effectivePrice(s), 0),
   }))
 
   type UpcomingItem = {
@@ -68,11 +69,11 @@ export default async function FinancijePage() {
     }
     if (s.status === 'trialing' && s.trial_end) {
       const daysLeft = differenceInDays(new Date(s.trial_end), now)
-      if (daysLeft >= 0 && daysLeft <= 30) upcoming.push({ ...base, date: s.trial_end, type: 'trial_converts', amount: PLAN_PRICES[s.plan] ?? 0, daysLeft })
+      if (daysLeft >= 0 && daysLeft <= 30) upcoming.push({ ...base, date: s.trial_end, type: 'trial_converts', amount: effectivePrice(s), daysLeft })
     }
     if (s.status === 'active' && s.current_period_end && !s.cancel_at_period_end) {
       const daysLeft = differenceInDays(new Date(s.current_period_end), now)
-      if (daysLeft >= 0 && daysLeft <= 30) upcoming.push({ ...base, date: s.current_period_end, type: 'renewal', amount: PLAN_PRICES[s.plan] ?? 0, daysLeft })
+      if (daysLeft >= 0 && daysLeft <= 30) upcoming.push({ ...base, date: s.current_period_end, type: 'renewal', amount: effectivePrice(s), daysLeft })
     }
     if (s.cancel_at_period_end && s.current_period_end) {
       const daysLeft = differenceInDays(new Date(s.current_period_end), now)
@@ -90,7 +91,7 @@ export default async function FinancijePage() {
   for (let i = 11; i >= 0; i--) months[format(subMonths(now, i), 'MMM yy')] = { revenue: 0, count: 0 }
   allSubs.filter(s => s.status !== 'trialing').forEach(s => {
     const key = format(new Date(s.created_at), 'MMM yy')
-    if (key in months) { months[key].revenue += PLAN_PRICES[s.plan] ?? 0; months[key].count++ }
+    if (key in months) { months[key].revenue += effectivePrice(s); months[key].count++ }
   })
   const chartData = Object.entries(months).map(([month, d]) => ({ month, ...d }))
 
@@ -109,7 +110,7 @@ export default async function FinancijePage() {
     const daysLeft = s.trial_end ? differenceInDays(new Date(s.trial_end), now) : null
     const trialDuration = s.trial_start && s.trial_end ? differenceInDays(new Date(s.trial_end), new Date(s.trial_start)) : 14
     const daysUsed = s.trial_start ? differenceInDays(now, new Date(s.trial_start)) : null
-    return { trainer_id: s.trainer_id, full_name: profile?.full_name ?? '—', email: profile?.email ?? '—', plan: s.plan, trial_start: s.trial_start, trial_end: s.trial_end, daysLeft, daysUsed, trialDuration, firstChargeDate: s.trial_end, firstChargeAmount: PLAN_PRICES[s.plan] ?? 0 }
+    return { trainer_id: s.trainer_id, full_name: profile?.full_name ?? '—', email: profile?.email ?? '—', plan: s.plan, trial_start: s.trial_start, trial_end: s.trial_end, daysLeft, daysUsed, trialDuration, firstChargeDate: s.trial_end, firstChargeAmount: effectivePrice(s) }
   }).sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))
 
   const historyData = buildMonthlyHistory(allSubs)
@@ -133,6 +134,9 @@ export default async function FinancijePage() {
 type SubRecord = {
   plan: string; status: string; created_at: string; updated_at: string;
   trial_end: string | null;
+  promo_granted_at?: string | null;
+  promo_ends_at?: string | null;
+  promo_lost_at?: string | null;
 }
 
 function buildMonthlyHistory(subs: SubRecord[]) {
@@ -157,7 +161,7 @@ function buildMonthlyHistory(subs: SubRecord[]) {
       return new Date(s.trial_end) <= monthEnd
     })
 
-    const mrr = paying.reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+    const mrr = paying.reduce((sum, s) => sum + effectivePrice(s), 0)
     const newCount = subs.filter(s => {
       const d = new Date(s.created_at)
       return d >= monthStart && d <= monthEnd

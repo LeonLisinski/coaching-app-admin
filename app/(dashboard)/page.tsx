@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createAdminClient } from '@/lib/supabase-admin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { PLAN_PRICES, PLAN_LABELS } from '@/lib/config'
+import { PLAN_LABELS, effectivePrice } from '@/lib/config'
 import { RevenueChart } from '@/components/overview/revenue-chart'
 import {
   TrendingUp, Users, UserPlus, UserMinus,
@@ -27,18 +27,19 @@ export default async function OverviewPage() {
     { data: upcomingBillingSubs },
     { data: upcomingTrialSubs },
   ] = await Promise.all([
-    supabase.from('subscriptions').select('plan, status, trainer_id'),
+    supabase.from('subscriptions').select('plan, status, trainer_id, promo_granted_at, promo_ends_at, promo_lost_at'),
     supabase.from('profiles').select('id').eq('role', 'trainer').gte('created_at', monthStart),
     supabase.from('subscriptions').select('id').eq('status', 'canceled').gte('updated_at', monthStart),
     supabase.from('profiles').select('id, full_name, email, created_at')
       .eq('role', 'trainer').order('created_at', { ascending: false }).limit(5),
-    supabase.from('subscriptions').select('plan, status, created_at')
+    supabase.from('subscriptions').select('plan, status, created_at, promo_granted_at, promo_ends_at, promo_lost_at')
       .gte('created_at', subMonths(now, 12).toISOString()),
     supabase.from('bug_log').select('id, priority, status')
       .neq('status', 'riješen').order('created_at', { ascending: false }),
     // Active subs renewing in 30 days
     supabase.from('subscriptions').select(`
       trainer_id, plan, status, current_period_end, cancel_at_period_end,
+      promo_granted_at, promo_ends_at, promo_lost_at,
       profiles:trainer_id ( full_name )
     `).eq('status', 'active')
       .lte('current_period_end', in30Days)
@@ -47,6 +48,7 @@ export default async function OverviewPage() {
     // Trials ending in 30 days → first payment
     supabase.from('subscriptions').select(`
       trainer_id, plan, status, trial_end,
+      promo_granted_at, promo_ends_at, promo_lost_at,
       profiles:trainer_id ( full_name )
     `).eq('status', 'trialing')
       .lte('trial_end', in30Days)
@@ -55,9 +57,9 @@ export default async function OverviewPage() {
   ])
 
   const subs = allSubs ?? []
-  const mrr = subs.filter(s => s.status === 'active').reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+  const mrr = subs.filter(s => s.status === 'active').reduce((sum, s) => sum + effectivePrice(s), 0)
   const arr = mrr * 12
-  const pipeline = subs.filter(s => s.status === 'trialing').reduce((sum, s) => sum + (PLAN_PRICES[s.plan] ?? 0), 0)
+  const pipeline = subs.filter(s => s.status === 'trialing').reduce((sum, s) => sum + effectivePrice(s), 0)
   const activeCount = subs.filter(s => s.status === 'active').length
   const trialCount = subs.filter(s => s.status === 'trialing').length
   const newCount = newTrainers?.length ?? 0
@@ -76,6 +78,7 @@ export default async function OverviewPage() {
     plan: string
     type: 'renewal' | 'trial_end' | 'cancel'
     revenue: number
+    lostAmount?: number
     daysLeft: number
   }
 
@@ -87,7 +90,7 @@ export default async function OverviewPage() {
         name: profile?.full_name ?? '—',
         plan: s.plan,
         type: 'trial_end' as const,
-        revenue: PLAN_PRICES[s.plan] ?? 0,
+        revenue: effectivePrice(s),
         daysLeft: differenceInDays(new Date(s.trial_end!), now),
       }
     }),
@@ -98,7 +101,8 @@ export default async function OverviewPage() {
         name: profile?.full_name ?? '—',
         plan: s.plan,
         type: s.cancel_at_period_end ? 'cancel' as const : 'renewal' as const,
-        revenue: s.cancel_at_period_end ? 0 : PLAN_PRICES[s.plan] ?? 0,
+        revenue: s.cancel_at_period_end ? 0 : effectivePrice(s),
+        lostAmount: s.cancel_at_period_end ? effectivePrice(s) : undefined,
         daysLeft: differenceInDays(new Date(s.current_period_end!), now),
       }
     }),
@@ -107,8 +111,8 @@ export default async function OverviewPage() {
     .slice(0, 8)
 
   const upcoming30DayRevenue = [
-    ...(upcomingTrialSubs ?? []).map(s => PLAN_PRICES[s.plan] ?? 0),
-    ...(upcomingBillingSubs ?? []).filter(s => !s.cancel_at_period_end).map(s => PLAN_PRICES[s.plan] ?? 0),
+    ...(upcomingTrialSubs ?? []).map(s => effectivePrice(s)),
+    ...(upcomingBillingSubs ?? []).filter(s => !s.cancel_at_period_end).map(s => effectivePrice(s)),
   ].reduce((a, b) => a + b, 0)
 
   return (
@@ -240,7 +244,7 @@ export default async function OverviewPage() {
                         ev.type === 'cancel' ? 'text-muted-foreground line-through' :
                         ev.type === 'trial_end' ? 'text-emerald-400' : 'text-foreground'
                       }`}>
-                        {ev.type === 'cancel' ? `€${PLAN_PRICES[ev.plan] ?? 0}` : `+€${ev.revenue}`}
+                        {ev.type === 'cancel' ? `€${ev.lostAmount ?? 0}` : `+€${ev.revenue}`}
                       </span>
                       <p className="text-[10px] text-muted-foreground">{format(new Date(ev.date), 'd. M.')}</p>
                     </div>
@@ -295,7 +299,7 @@ export default async function OverviewPage() {
   )
 }
 
-function buildChartData(subs: Array<{ plan: string; status: string; created_at: string }>) {
+function buildChartData(subs: Array<{ plan: string; status: string; created_at: string; promo_granted_at?: string | null; promo_ends_at?: string | null; promo_lost_at?: string | null }>) {
   const now = new Date()
   const months: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) {
@@ -303,7 +307,7 @@ function buildChartData(subs: Array<{ plan: string; status: string; created_at: 
   }
   subs.forEach((s) => {
     const key = format(new Date(s.created_at), 'MMM yy')
-    if (key in months) months[key] += PLAN_PRICES[s.plan] ?? 0
+    if (key in months) months[key] += effectivePrice(s)
   })
   return Object.entries(months).map(([month, revenue]) => ({ month, revenue }))
 }

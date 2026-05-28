@@ -24,7 +24,10 @@ export default async function TreneriPage() {
         cancel_at_period_end,
         stripe_customer_id,
         stripe_subscription_id,
-        client_limit
+        client_limit,
+        promo_granted_at,
+        promo_ends_at,
+        promo_lost_at
       )
     `)
     .eq('role', 'trainer')
@@ -48,6 +51,9 @@ export default async function TreneriPage() {
       stripe_customer_id: sub?.stripe_customer_id ?? null,
       stripe_subscription_id: sub?.stripe_subscription_id ?? null,
       client_limit: sub?.client_limit ?? null,
+      promo_granted_at: sub?.promo_granted_at ?? null,
+      promo_ends_at: sub?.promo_ends_at ?? null,
+      promo_lost_at: sub?.promo_lost_at ?? null,
     }
   })
 

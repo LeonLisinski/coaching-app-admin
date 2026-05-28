@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
-import { PLAN_LABELS, STATUS_LABELS } from '@/lib/config'
+import { PLAN_LABELS, STATUS_LABELS, effectivePrice } from '@/lib/config'
 
 interface Trainer {
   id: string
@@ -25,6 +25,9 @@ interface Trainer {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   client_limit: number | null
+  promo_granted_at: string | null
+  promo_ends_at: string | null
+  promo_lost_at: string | null
 }
 
 function getPlanBadge(plan: string | null) {
@@ -273,8 +276,6 @@ function CopyButton({ value }: { value: string }) {
 function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
   const now = new Date()
   const ctx = getSubContext(t)
-  const PLAN_PRICES: Record<string, number> = { starter: 29, pro: 59, scale: 99 }
-
   return (
     <>
       <SheetHeader>
@@ -372,7 +373,7 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
             {t.plan && (
               <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
                 <p className="text-xs text-muted-foreground">Cijena</p>
-                <p className="text-lg font-bold mt-0.5">€{PLAN_PRICES[t.plan] ?? '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></p>
+                <p className="text-lg font-bold mt-0.5">€{t.plan ? effectivePrice(t) : '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></p>
               </div>
             )}
           </div>
@@ -390,7 +391,7 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
                 />
                 <Row
                   label="1. naplata"
-                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · €${PLAN_PRICES[t.plan ?? ''] ?? '—'}`}
+                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · €${t.plan ? effectivePrice(t) : '—'}`}
                 />
               </>
             )}

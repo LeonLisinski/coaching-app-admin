@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, MessageSquare,
-  Mail, Bug, StickyNote, BarChart3, Vault,
+  Mail, Bug, StickyNote, BarChart3, Vault, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,7 @@ const internalNavItems = [
   { href: '/bugovi', label: 'Bugovi', icon: Bug, isBug: true },
   { href: '/notes', label: 'Notes', icon: StickyNote },
   { href: '/sef', label: 'Sef', icon: Vault },
+  { href: '/prezentacije', label: 'Demo', icon: CalendarDays },
 ]
 
 const GMAIL_URL = 'https://mail.google.com/a/unitlift.com/'

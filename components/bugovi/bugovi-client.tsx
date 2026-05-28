@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase'
 
 interface BugEntry {
   id: string
@@ -57,8 +56,6 @@ export function BugoviClient({ bugs: initialBugs }: { bugs: BugEntry[] }) {
   })
   const [saving, setSaving] = useState(false)
 
-  const supabase = createClient()
-
   const filtered = bugs.filter((b) => {
     if (priorityFilter !== 'all' && b.priority !== priorityFilter) return false
     if (statusFilter !== 'all' && b.status !== statusFilter) return false
@@ -70,16 +67,17 @@ export function BugoviClient({ bugs: initialBugs }: { bugs: BugEntry[] }) {
     if (!form.title.trim()) return
     setSaving(true)
 
-    const { data, error } = await supabase
-      .from('bug_log')
-      .insert({ ...form, status: 'otvoren' })
-      .select()
-      .single()
+    const res = await fetch('/api/bugovi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const json = await res.json()
 
-    if (error) {
+    if (!res.ok) {
       toast.error('Greška pri unosu buga')
     } else {
-      setBugs((prev) => [data, ...prev])
+      setBugs((prev) => [json.data, ...prev])
       setForm({ title: '', description: '', location: LOCATIONS[0], priority: 'srednji' })
       setOpen(false)
       toast.success('Bug zabilježen')
@@ -89,9 +87,13 @@ export function BugoviClient({ bugs: initialBugs }: { bugs: BugEntry[] }) {
 
   async function updateStatus(id: string, status: string) {
     setUpdating(id)
-    const { error } = await supabase.from('bug_log').update({ status }).eq('id', id)
-    if (error) {
-      toast.error('Greška')
+    const res = await fetch(`/api/bugovi/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (!res.ok) {
+      toast.error('Greška pri ažuriranju statusa')
     } else {
       setBugs((prev) => prev.map((b) => b.id === id ? { ...b, status: status as BugEntry['status'] } : b))
     }

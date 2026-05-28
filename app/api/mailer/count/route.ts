@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
     case 'inactive':
       query = query.in('status', ['canceled', 'locked'])
       break
+    case 'ambassador':
+      query = query.eq('is_ambassador', true)
+      break
     default:
       break
   }

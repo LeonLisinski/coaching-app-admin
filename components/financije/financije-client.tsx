@@ -21,6 +21,8 @@ interface UpcomingItem { date: string; trainer_id: string; full_name: string; em
 
 interface HistoryRow { month: string; new: number; churned: number; active: number; mrr: number }
 
+interface AmbassadorRow { trainer_id: string; full_name: string; email: string; plan: string; status: string; created_at: string }
+
 interface Props {
   mrr: number; arr: number; pipeline: number; atRiskRevenue: number; churningRevenue: number
   activeCount: number; trialCount: number; pastDueCount: number; lockedCount: number; canceledCount: number; churningCount: number
@@ -32,6 +34,8 @@ interface Props {
   upcomingEvents: UpcomingItem[]
   upcomingRevenue: number
   historyData: HistoryRow[]
+  ambassadorCount: number
+  ambassadorDetails: AmbassadorRow[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -68,6 +72,7 @@ export function FinancijeClient({
   activeCount, trialCount, pastDueCount, lockedCount, canceledCount, churningCount,
   planBreakdown, chartData, atRiskDetails, churningDetails, trialDetails,
   upcomingEvents, upcomingRevenue, historyData,
+  ambassadorCount, ambassadorDetails,
 }: Props) {
 
   const totalActive = activeCount + trialCount
@@ -143,6 +148,7 @@ export function FinancijeClient({
           { l: 'Past Due', c: pastDueCount, s: 'bg-red-500/20 text-red-300 border-red-500/30' },
           { l: 'Locked', c: lockedCount, s: 'bg-red-900/30 text-red-400 border-red-700/30' },
           { l: 'Canceled', c: canceledCount, s: 'bg-zinc-700/30 text-zinc-400 border-zinc-600/30' },
+          { l: 'Ambassador', c: ambassadorCount, s: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
         ].map(s => (
           <span key={s.l} className={`text-xs px-3 py-1.5 rounded-full border font-medium ${s.s}`}>
             {s.l}: <strong>{s.c}</strong>
@@ -242,9 +248,19 @@ export function FinancijeClient({
                   <span className="text-right font-semibold">€{row.revenue.toLocaleString()}</span>
                 </div>
               ))}
+              {ambassadorCount > 0 && (
+                <div className="grid grid-cols-4 py-3 items-center text-sm">
+                  <span className="text-xs px-2 py-0.5 rounded border font-medium w-fit bg-amber-500/20 text-amber-300 border-amber-500/30">
+                    Ambassador
+                  </span>
+                  <span className="text-center font-mono font-semibold">{ambassadorCount}</span>
+                  <span className="text-center font-mono text-muted-foreground">—</span>
+                  <span className="text-right font-semibold text-muted-foreground">€0</span>
+                </div>
+              )}
               <div className="grid grid-cols-4 py-3 items-center text-sm font-bold">
                 <span className="text-muted-foreground">Ukupno</span>
-                <span className="text-center">{activeCount}</span>
+                <span className="text-center">{activeCount + ambassadorCount}</span>
                 <span className="text-center text-yellow-400">{trialCount}</span>
                 <span className="text-right text-blue-400">€{mrr.toLocaleString()}</span>
               </div>
@@ -303,6 +319,14 @@ export function FinancijeClient({
             {churningCount > 0 && (
               <span className="ml-1.5 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                 {churningCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="ambassador">
+            Ambasadori
+            {ambassadorCount > 0 && (
+              <span className="ml-1.5 bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {ambassadorCount}
               </span>
             )}
           </TabsTrigger>
@@ -460,6 +484,31 @@ export function FinancijeClient({
         </TabsContent>
 
         {/* Povijest */}
+        <TabsContent value="ambassador" className="mt-4">
+          {ambassadorDetails.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Nema ambasadora.</p>
+          ) : (
+            <div className="space-y-2">
+              {ambassadorDetails.map(r => (
+                <div key={r.trainer_id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3 gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">{r.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{r.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs px-2 py-0.5 rounded border font-medium bg-amber-500/20 text-amber-300 border-amber-500/30">
+                      Ambassador
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      od {format(new Date(r.created_at), 'd. M. yyyy')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="povijest" className="mt-4">
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">

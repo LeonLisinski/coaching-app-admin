@@ -35,6 +35,7 @@ function getPlanBadge(plan: string | null) {
     case 'scale': return 'bg-violet-500/20 text-violet-300 border-violet-500/30'
     case 'pro': return 'bg-blue-500/20 text-blue-300 border-blue-500/30'
     case 'starter': return 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30'
+    case 'ambassador': return 'bg-amber-500/20 text-amber-300 border-amber-500/30'
     default: return 'bg-zinc-800 text-zinc-400 border-zinc-700'
   }
 }
@@ -373,7 +374,9 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
             {t.plan && (
               <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
                 <p className="text-xs text-muted-foreground">Cijena</p>
-                <p className="text-lg font-bold mt-0.5">€{t.plan ? effectivePrice(t) : '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></p>
+                <p className="text-lg font-bold mt-0.5">
+                  {t.plan === 'ambassador' ? <span className="text-amber-400">Besplatno</span> : <>€{t.plan ? effectivePrice(t) : '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></>}
+                </p>
               </div>
             )}
           </div>
@@ -391,7 +394,7 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
                 />
                 <Row
                   label="1. naplata"
-                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · €${t.plan ? effectivePrice(t) : '—'}`}
+                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · ${t.plan === 'ambassador' ? 'Besplatno' : `€${t.plan ? effectivePrice(t) : '—'}`}`}
                 />
               </>
             )}

@@ -13,7 +13,7 @@ export default async function FinancijePage() {
   const { data: subs } = await supabase
     .from('subscriptions')
     .select(`
-      trainer_id, plan, status,
+      trainer_id, plan, status, is_ambassador,
       current_period_end, current_period_start,
       trial_start, trial_end,
       locked_at, cancel_at_period_end,
@@ -37,6 +37,8 @@ export default async function FinancijePage() {
   const pipeline        = trialSubs.reduce((sum, s) => sum + effectivePrice(s), 0)
   const atRiskRevenue   = pastDueSubs.reduce((sum, s) => sum + effectivePrice(s), 0)
   const churningRevenue = churning.reduce((sum, s) => sum + effectivePrice(s), 0)
+
+  const ambassadorSubs = allSubs.filter(s => s.is_ambassador)
 
   const planBreakdown = ['starter', 'pro', 'scale'].map(plan => ({
     plan,
@@ -115,6 +117,11 @@ export default async function FinancijePage() {
 
   const historyData = buildMonthlyHistory(allSubs)
 
+  const ambassadorDetails = ambassadorSubs.map(s => {
+    const profile = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles
+    return { trainer_id: s.trainer_id, full_name: profile?.full_name ?? '—', email: profile?.email ?? '—', plan: s.plan, status: s.status, created_at: s.created_at }
+  })
+
   return (
     <FinancijeClient
       mrr={mrr} arr={arr} pipeline={pipeline}
@@ -127,6 +134,8 @@ export default async function FinancijePage() {
       trialDetails={trialDetails} upcomingEvents={upcoming}
       upcomingRevenue={upcomingRevenue}
       historyData={historyData}
+      ambassadorCount={ambassadorSubs.length}
+      ambassadorDetails={ambassadorDetails}
     />
   )
 }

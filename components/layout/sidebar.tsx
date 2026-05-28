@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, MessageSquare,
-  Mail, Bug, StickyNote, LogOut, BarChart3, Settings, Vault, CalendarDays,
+  Mail, StickyNote, LogOut, BarChart3, Settings, Vault, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,6 @@ const internalNavItems = [
   { href: '/treneri', label: 'Treneri', icon: Users },
   { href: '/expiring', label: 'Expiring Soon', icon: Clock },
   { href: '/mailer', label: 'Mailer', icon: Mail },
-  { href: '/bugovi', label: 'Bug Log', icon: Bug, badge: 'bugs' as const },
   { href: '/notes', label: 'Notes', icon: StickyNote },
   { href: '/sef', label: 'Sef', icon: Vault },
   { href: '/prezentacije', label: 'Prezentacije', icon: CalendarDays },
@@ -25,7 +24,7 @@ const internalNavItems = [
 
 const GMAIL_URL = 'https://mail.google.com/a/unitlift.com/'
 
-export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
+export function Sidebar() {
   const pathname = usePathname()
 
   async function handleSignOut() {
@@ -51,9 +50,8 @@ export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {internalNavItems.map(({ href, label, icon: Icon, badge }) => {
+        {internalNavItems.map(({ href, label, icon: Icon }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
-          const count = badge === 'bugs' ? highBugs : 0
           return (
             <Link
               key={href}
@@ -67,11 +65,6 @@ export function Sidebar({ highBugs = 0 }: { highBugs?: number }) {
             >
               <Icon className="w-4 h-4 shrink-0" />
               <span className="flex-1">{label}</span>
-              {count > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center bg-red-500 text-white">
-                  {count > 9 ? '9+' : count}
-                </span>
-              )}
             </Link>
           )
         })}

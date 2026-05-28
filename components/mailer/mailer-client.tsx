@@ -25,6 +25,7 @@ const SEGMENTS = [
   { value: 'starter', label: 'Samo Starter' },
   { value: 'pro', label: 'Samo Pro' },
   { value: 'scale', label: 'Samo Scale' },
+  { value: 'ambassador', label: 'Samo Ambasadori' },
   { value: 'active', label: 'Samo aktivni' },
   { value: 'inactive', label: 'Samo neaktivni (canceled/locked)' },
 ]

@@ -32,6 +32,7 @@ export const PLAN_LABELS: Record<string, string> = {
   starter: 'Starter',
   pro: 'Pro',
   scale: 'Scale',
+  ambassador: 'Ambassador',
 }
 
 export const STATUS_LABELS: Record<string, string> = {

@@ -6,7 +6,7 @@ import { PLAN_LABELS, effectivePrice } from '@/lib/config'
 import { RevenueChart } from '@/components/overview/revenue-chart'
 import {
   TrendingUp, Users, UserPlus, UserMinus,
-  Clock, DollarSign, Bug, CalendarClock, AlertTriangle
+  Clock, DollarSign, Star, CalendarClock, AlertTriangle
 } from 'lucide-react'
 import { format, startOfMonth, subMonths, addDays, differenceInDays } from 'date-fns'
 import Link from 'next/link'
@@ -23,19 +23,16 @@ export default async function OverviewPage() {
     { data: churnedSubs },
     { data: recentProfiles },
     { data: historySubs },
-    { data: openBugs },
     { data: upcomingBillingSubs },
     { data: upcomingTrialSubs },
   ] = await Promise.all([
-    supabase.from('subscriptions').select('plan, status, trainer_id, promo_granted_at, promo_ends_at, promo_lost_at'),
+    supabase.from('subscriptions').select('plan, status, trainer_id, is_ambassador, promo_granted_at, promo_ends_at, promo_lost_at'),
     supabase.from('profiles').select('id').eq('role', 'trainer').gte('created_at', monthStart),
     supabase.from('subscriptions').select('id').eq('status', 'canceled').gte('updated_at', monthStart),
     supabase.from('profiles').select('id, full_name, email, created_at')
       .eq('role', 'trainer').order('created_at', { ascending: false }).limit(5),
     supabase.from('subscriptions').select('plan, status, created_at, promo_granted_at, promo_ends_at, promo_lost_at')
       .gte('created_at', subMonths(now, 12).toISOString()),
-    supabase.from('bug_log').select('id, priority, status')
-      .neq('status', 'riješen').order('created_at', { ascending: false }),
     // Active subs renewing in 30 days
     supabase.from('subscriptions').select(`
       trainer_id, plan, status, current_period_end, cancel_at_period_end,
@@ -62,14 +59,10 @@ export default async function OverviewPage() {
   const pipeline = subs.filter(s => s.status === 'trialing').reduce((sum, s) => sum + effectivePrice(s), 0)
   const activeCount = subs.filter(s => s.status === 'active').length
   const trialCount = subs.filter(s => s.status === 'trialing').length
+  const ambassadorCount = subs.filter(s => s.is_ambassador).length
   const newCount = newTrainers?.length ?? 0
   const churnCount = churnedSubs?.length ?? 0
   const chartData = buildChartData(historySubs ?? [])
-
-  // Bug stats
-  const bugs = openBugs ?? []
-  const highBugs = bugs.filter(b => b.priority === 'visok').length
-  const totalOpenBugs = bugs.length
 
   // Upcoming events — merge billing + trials, sort by date
   type UpcomingEvent = {
@@ -188,16 +181,14 @@ export default async function OverviewPage() {
             <p className="text-xs text-muted-foreground mt-1">Registrirali se</p>
           </CardContent>
         </Card>
-        <Card className={highBugs > 0 ? 'border-red-500/30 bg-red-500/5' : ''}>
+        <Card className={ambassadorCount > 0 ? 'border-amber-500/20 bg-amber-500/5' : ''}>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Otvoreni bugovi</CardTitle>
-            <Bug className={`w-4 h-4 ${highBugs > 0 ? 'text-red-400' : 'text-muted-foreground'}`} />
+            <CardTitle className="text-xs font-medium text-muted-foreground">Ambasadori</CardTitle>
+            <Star className="w-4 h-4 text-amber-400" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${highBugs > 0 ? 'text-red-400' : ''}`}>{totalOpenBugs}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {highBugs > 0 ? `${highBugs} visokog prioriteta` : 'Nema kritičnih'}
-            </p>
+            <div className="text-2xl font-bold text-amber-400">{ambassadorCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Besplatni pristup</p>
           </CardContent>
         </Card>
       </div>

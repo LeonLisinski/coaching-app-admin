@@ -120,17 +120,17 @@ export function FinancijeClient({
         </Card>
         <Card className={atRiskRevenue > 0 ? 'border-red-500/20 bg-red-500/5' : ''}>
           <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs text-muted-foreground">At Risk</CardTitle>
+            <CardTitle className="text-xs text-muted-foreground">Rizično</CardTitle>
             <AlertTriangle className="w-4 h-4 text-red-400" />
           </CardHeader>
           <CardContent>
             <p className={`text-2xl font-bold ${atRiskRevenue > 0 ? 'text-red-400' : ''}`}>€{atRiskRevenue.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{pastDueCount} past_due · {lockedCount} locked</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{pastDueCount} kasni · {lockedCount} zaključano</p>
           </CardContent>
         </Card>
         <Card className={churningRevenue > 0 ? 'border-orange-500/20 bg-orange-500/5' : ''}>
           <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs text-muted-foreground">Churning</CardTitle>
+            <CardTitle className="text-xs text-muted-foreground">Otkazuju</CardTitle>
             <TrendingDown className="w-4 h-4 text-orange-400" />
           </CardHeader>
           <CardContent>
@@ -228,7 +228,7 @@ export function FinancijeClient({
         {/* Plan breakdown */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Plan breakdown</CardTitle>
+            <CardTitle className="text-base">Po paketima</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-0 divide-y divide-border">
@@ -307,7 +307,7 @@ export function FinancijeClient({
             )}
           </TabsTrigger>
           <TabsTrigger value="atrisk">
-            At Risk
+            Rizično
             {(pastDueCount + lockedCount) > 0 && (
               <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                 {pastDueCount + lockedCount}
@@ -315,7 +315,7 @@ export function FinancijeClient({
             )}
           </TabsTrigger>
           <TabsTrigger value="churning">
-            Churning
+            Otkazuju
             {churningCount > 0 && (
               <span className="ml-1.5 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                 {churningCount}

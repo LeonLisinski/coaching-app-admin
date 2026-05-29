@@ -9,6 +9,7 @@ import {
   Clock, DollarSign, Star, CalendarClock, AlertTriangle
 } from 'lucide-react'
 import { format, startOfMonth, subMonths, addDays, differenceInDays } from 'date-fns'
+import { hr } from 'date-fns/locale'
 import Link from 'next/link'
 
 export default async function OverviewPage() {
@@ -111,11 +112,13 @@ export default async function OverviewPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Overview</h1>
-        <p className="text-muted-foreground text-sm mt-1">{format(now, 'MMMM yyyy')}</p>
+        <h1 className="text-2xl font-bold">Pregled</h1>
+        <p className="text-muted-foreground text-sm mt-1 capitalize">{format(now, 'LLLL yyyy.', { locale: hr })}</p>
       </div>
 
-      {/* Financijski KPI */}
+      {/* Financije */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Financije</h2>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <Card className="border-blue-500/30 bg-blue-500/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -148,8 +151,11 @@ export default async function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+      </section>
 
-      {/* Treneri row */}
+      {/* Treneri */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Treneri</h2>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -158,7 +164,7 @@ export default async function OverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{activeCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Status: active</p>
+            <p className="text-xs text-muted-foreground mt-1">Aktivne pretplate</p>
           </CardContent>
         </Card>
         <Card className={trialCount > 0 ? 'border-yellow-500/20' : ''}>
@@ -192,6 +198,7 @@ export default async function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Upcoming events */}
@@ -294,10 +301,10 @@ function buildChartData(subs: Array<{ plan: string; status: string; created_at: 
   const now = new Date()
   const months: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) {
-    months[format(subMonths(now, i), 'MMM yy')] = 0
+    months[format(subMonths(now, i), 'LLL yy', { locale: hr })] = 0
   }
   subs.forEach((s) => {
-    const key = format(new Date(s.created_at), 'MMM yy')
+    const key = format(new Date(s.created_at), 'LLL yy', { locale: hr })
     if (key in months) months[key] += effectivePrice(s)
   })
   return Object.entries(months).map(([month, revenue]) => ({ month, revenue }))

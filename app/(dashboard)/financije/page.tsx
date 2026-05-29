@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { PLAN_PRICES, PLAN_LABELS, effectivePrice } from '@/lib/config'
 import { FinancijeClient } from '@/components/financije/financije-client'
 import { differenceInDays, endOfMonth, format, startOfMonth, subMonths, addDays } from 'date-fns'
+import { hr } from 'date-fns/locale'
 
 export default async function FinancijePage() {
   const supabase = createAdminClient()
@@ -90,9 +91,9 @@ export default async function FinancijePage() {
   const upcomingRevenue = upcoming.filter(u => u.type === 'trial_converts' || u.type === 'renewal').reduce((sum, u) => sum + u.amount, 0)
 
   const months: Record<string, { revenue: number; count: number }> = {}
-  for (let i = 11; i >= 0; i--) months[format(subMonths(now, i), 'MMM yy')] = { revenue: 0, count: 0 }
+  for (let i = 11; i >= 0; i--) months[format(subMonths(now, i), 'LLL yy', { locale: hr })] = { revenue: 0, count: 0 }
   allSubs.filter(s => s.status !== 'trialing').forEach(s => {
-    const key = format(new Date(s.created_at), 'MMM yy')
+    const key = format(new Date(s.created_at), 'LLL yy', { locale: hr })
     if (key in months) { months[key].revenue += effectivePrice(s); months[key].count++ }
   })
   const chartData = Object.entries(months).map(([month, d]) => ({ month, ...d }))
@@ -181,7 +182,7 @@ function buildMonthlyHistory(subs: SubRecord[]) {
       return d >= monthStart && d <= monthEnd
     }).length
 
-    result.push({ month: format(monthDate, 'MMM yyyy'), new: newCount, churned: churnCount, active: activeAtEnd.length, mrr })
+    result.push({ month: format(monthDate, 'LLL yyyy.', { locale: hr }), new: newCount, churned: churnCount, active: activeAtEnd.length, mrr })
   }
 
   return result

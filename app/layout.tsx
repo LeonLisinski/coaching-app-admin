@@ -16,17 +16,25 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "UnitLift Admin",
   description: "UnitLift internal admin dashboard",
+  applicationName: "UnitLift Admin",
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon.ico', sizes: '48x48' },
     ],
-    apple: '/apple-touch-icon.png',
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    other: [
+      { rel: 'icon', url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'UnitLift Admin',
+    startupImage: '/apple-touch-icon.png',
   },
 };
 

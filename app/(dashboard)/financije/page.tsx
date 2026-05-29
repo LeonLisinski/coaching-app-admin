@@ -118,9 +118,179 @@ export default async function FinancijePage() {
 
   const historyData = buildMonthlyHistory(allSubs)
 
+  // ── Churn analytics ────────────────────────────────────────────────────────
+  const thisMonthStart = startOfMonth(now)
+  const lastMonthStart = startOfMonth(subMonths(now, 1))
+  const lastMonthEnd   = endOfMonth(subMonths(now, 1))
+
+  const churnedThisMonth = allSubs.filter(s =>
+    s.status === 'canceled' &&
+    new Date(s.updated_at) >= thisMonthStart
+  ).length
+
+  const churnedLastMonth = allSubs.filter(s =>
+    s.status === 'canceled' &&
+    new Date(s.updated_at) >= lastMonthStart &&
+    new Date(s.updated_at) <= lastMonthEnd
+  ).length
+
+  // Active at start of this month (existing subs created before month start, not yet canceled or canceled after month start)
+  const activeAtMonthStart = allSubs.filter(s => {
+    const created = new Date(s.created_at)
+    if (created >= thisMonthStart) return false
+    if (s.status === 'canceled' && new Date(s.updated_at) < thisMonthStart) return false
+    return true
+  }).length
+
+  const activeAtLastMonthStart = allSubs.filter(s => {
+    const created = new Date(s.created_at)
+    if (created >= lastMonthStart) return false
+    if (s.status === 'canceled' && new Date(s.updated_at) < lastMonthStart) return false
+    return true
+  }).length
+
+  const churnRateThisMonth = activeAtMonthStart > 0
+    ? Math.round((churnedThisMonth / activeAtMonthStart) * 100)
+    : 0
+
+  const churnRateLastMonth = activeAtLastMonthStart > 0
+    ? Math.round((churnedLastMonth / activeAtLastMonthStart) * 100)
+    : 0
+
+  // Average subscription lifetime (months) from canceled subs
+  const canceledWithDates = canceledSubs.filter(s => s.created_at && s.updated_at)
+  const avgLifetimeDays = canceledWithDates.length > 0
+    ? canceledWithDates.reduce((sum, s) =>
+        sum + differenceInDays(new Date(s.updated_at), new Date(s.created_at)), 0
+      ) / canceledWithDates.length
+    : 0
+  const avgLifetimeMonths = Math.round((avgLifetimeDays / 30) * 10) / 10
+
+  // LTV = avg lifetime months * avg revenue per paying sub
+  const payingSubs = activeSubs.filter(s => !s.is_ambassador)
+  const avgRevenue = payingSubs.length > 0
+    ? payingSubs.reduce((sum, s) => sum + effectivePrice(s), 0) / payingSubs.length
+    : 0
+  const ltv = Math.round(avgLifetimeMonths * avgRevenue)
+
+  // Churn feedback breakdown
+  const { data: feedbackRows } = await supabase
+    .from('churn_feedback')
+    .select('reason')
+
+  const reasonCounts: Record<string, number> = {}
+  for (const row of feedbackRows ?? []) {
+    reasonCounts[row.reason] = (reasonCounts[row.reason] ?? 0) + 1
+  }
+
+  const churnStats = {
+    rateThisMonth: churnRateThisMonth,
+    rateLastMonth: churnRateLastMonth,
+    countThisMonth: churnedThisMonth,
+    countLastMonth: churnedLastMonth,
+    avgLifetimeMonths,
+    ltv,
+    alert: churnRateThisMonth >= 10,
+    reasonBreakdown: Object.entries(reasonCounts)
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count),
+  }
+
+  // Per-trainer churn feedback (for Treneri detail panel)
+  const { data: allFeedback } = await supabase
+    .from('churn_feedback')
+    .select('trainer_id, reason, note, created_at')
+
+  const feedbackByTrainer: Record<string, { reason: string; note: string | null; created_at: string }> = {}
+  for (const f of allFeedback ?? []) {
+    feedbackByTrainer[f.trainer_id] = { reason: f.reason, note: f.note, created_at: f.created_at }
+  }
+
   const ambassadorDetails = ambassadorSubs.map(s => {
     const profile = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles
     return { trainer_id: s.trainer_id, full_name: profile?.full_name ?? '—', email: profile?.email ?? '—', plan: s.plan, status: s.status, created_at: s.created_at }
+  })
+
+  // ── Conversion funnel ─────────────────────────────────────────────────────
+  // Use last 12 months of history data for monthly funnel
+  const funnelMonths = 3
+  const funnelData = Array.from({ length: funnelMonths }).map((_, i) => {
+    const mDate = subMonths(now, funnelMonths - 1 - i)
+    const mStart = startOfMonth(mDate)
+    const mEnd   = endOfMonth(mDate)
+    const label  = format(mDate, 'LLL yy.', { locale: hr })
+
+    const registered = allSubs.filter(s => {
+      const d = new Date(s.created_at)
+      return d >= mStart && d <= mEnd
+    }).length
+
+    const trialed = allSubs.filter(s => {
+      const d = new Date(s.created_at)
+      return d >= mStart && d <= mEnd && (s.trial_start !== null || s.status !== null)
+    }).length
+
+    const converted = allSubs.filter(s => {
+      const d = new Date(s.created_at)
+      return d >= mStart && d <= mEnd && (s.status === 'active' || s.status === 'past_due' || s.status === 'locked')
+    }).length
+
+    const churned = allSubs.filter(s => {
+      if (s.status !== 'canceled') return false
+      const d = new Date(s.updated_at)
+      return d >= mStart && d <= mEnd
+    }).length
+
+    return { label, registered, trialed, converted, churned }
+  })
+
+  // All-time funnel totals
+  const funnelTotals = {
+    registered: allSubs.length,
+    trialed: allSubs.filter(s => s.trial_start !== null).length,
+    converted: allSubs.filter(s => s.status === 'active' || s.status === 'past_due' || s.status === 'locked').length,
+    churned: canceledSubs.length,
+  }
+
+  // ── Revenue forecast (next 3 months) ─────────────────────────────────────
+  const forecastMonths = [1, 2, 3].map(offset => {
+    const mDate  = subMonths(now, -offset) // addMonths
+    const mStart = startOfMonth(mDate)
+    const mEnd   = endOfMonth(mDate)
+    const label  = format(mDate, 'LLL yyyy.', { locale: hr })
+
+    // Subs active (not canceled, not cancel_at_period_end expiring before this month)
+    let base = 0
+    let confirmed = 0
+    let lost = 0
+
+    activeSubs.forEach(s => {
+      const price = effectivePrice(s)
+      if (s.cancel_at_period_end && s.current_period_end) {
+        // Will this sub expire before this month?
+        const exp = new Date(s.current_period_end)
+        if (exp < mStart) {
+          lost += price
+        } else {
+          base += price
+        }
+      } else {
+        base += price
+      }
+      confirmed = base
+    })
+
+    // Trial subs that convert before this month
+    trialSubs.forEach(s => {
+      if (!s.trial_end) return
+      const trialEnd = new Date(s.trial_end)
+      if (trialEnd < mStart) {
+        // Already converted (or should have) by this month
+        confirmed += effectivePrice(s)
+      }
+    })
+
+    return { label, revenue: Math.round(confirmed), lost: Math.round(lost), month: format(mDate, 'M/yyyy') }
   })
 
   return (
@@ -137,6 +307,11 @@ export default async function FinancijePage() {
       historyData={historyData}
       ambassadorCount={ambassadorSubs.length}
       ambassadorDetails={ambassadorDetails}
+      churnStats={churnStats}
+      feedbackByTrainer={feedbackByTrainer}
+      funnelData={funnelData}
+      funnelTotals={funnelTotals}
+      forecastMonths={forecastMonths}
     />
   )
 }

@@ -2,11 +2,16 @@
 
 import { useState, useMemo } from 'react'
 import { format, differenceInDays } from 'date-fns'
-import { Search, ChevronRight, ExternalLink, AlertTriangle, Clock, XCircle, Copy, Check } from 'lucide-react'
+import { hr } from 'date-fns/locale'
+import {
+  Search, ChevronRight, ExternalLink, AlertTriangle,
+  XCircle, Copy, Check, Lock, Star, CalendarDays, CreditCard,
+  User, TrendingDown, RefreshCw, Clock,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Separator } from '@/components/ui/separator'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Progress } from '@/components/ui/progress'
 import { PLAN_LABELS, STATUS_LABELS, effectivePrice } from '@/lib/config'
 
 interface Trainer {
@@ -143,19 +148,24 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
           />
         </div>
         <Select value={planFilter} onValueChange={(v) => v != null && setPlanFilter(v)}>
-          <SelectTrigger className="w-full sm:w-36">
-            <SelectValue placeholder="Plan" />
+          <SelectTrigger className="w-full sm:w-40">
+            <span className="truncate text-sm">
+              {{ all: 'Svi planovi', starter: 'Starter', pro: 'Pro', scale: 'Scale', ambassador: 'Ambassador' }[planFilter] ?? 'Plan'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Svi planovi</SelectItem>
             <SelectItem value="starter">Starter</SelectItem>
             <SelectItem value="pro">Pro</SelectItem>
             <SelectItem value="scale">Scale</SelectItem>
+            <SelectItem value="ambassador">Ambassador</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={(v) => v != null && setStatusFilter(v)}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Status" />
+          <SelectTrigger className="w-full sm:w-44">
+            <span className="truncate text-sm">
+              {{ all: 'Svi statusi', active: 'Aktivan', trialing: 'Trial', past_due: 'Kasni', canceled: 'Otkazao', locked: 'Zaključan' }[statusFilter] ?? 'Status'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Svi statusi</SelectItem>
@@ -170,9 +180,9 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
 
       <p className="text-xs text-muted-foreground">{filtered.length} rezultata</p>
 
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden flex flex-col">
         {/* Desktop header */}
-        <div className="hidden md:grid grid-cols-[1.5fr_1.5fr_90px_110px_110px_120px] gap-3 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border">
+        <div className="hidden md:grid grid-cols-[1.5fr_1.5fr_90px_110px_110px_120px] gap-3 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border shrink-0">
           <span>Ime</span>
           <span>Email</span>
           <span>Plan</span>
@@ -186,7 +196,7 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
             Nema trenera koji odgovaraju filteru
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border overflow-y-auto max-h-[55vh] md:max-h-[65vh]">
             {filtered.map((t) => {
               const ctx = getSubContext(t)
               return (
@@ -252,7 +262,7 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
       </div>
 
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-md p-0 overflow-hidden flex flex-col">
           {selected && <TrainerDetail trainer={selected} />}
         </SheetContent>
       </Sheet>
@@ -277,198 +287,247 @@ function CopyButton({ value }: { value: string }) {
 function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
   const now = new Date()
   const ctx = getSubContext(t)
+  const price = effectivePrice(t)
+  const isAmbassador = t.plan === 'ambassador'
+
+  // Trial progress
+  const trialDuration = t.trial_start && t.trial_end
+    ? differenceInDays(new Date(t.trial_end), new Date(t.trial_start))
+    : 14
+  const trialUsed = t.trial_start ? Math.min(differenceInDays(now, new Date(t.trial_start)), trialDuration) : 0
+  const trialPct = trialDuration > 0 ? Math.round((trialUsed / trialDuration) * 100) : 0
+
+  // Initials avatar colour by plan
+  const avatarColor =
+    t.plan === 'scale' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' :
+    t.plan === 'pro' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+    isAmbassador ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+    'bg-zinc-700/40 text-zinc-300 border-zinc-600/40'
+
+  const initials = t.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+
   return (
-    <>
-      <SheetHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <SheetTitle className="text-lg leading-tight">{t.full_name}</SheetTitle>
-            <p className="text-sm text-muted-foreground mt-0.5">{t.email}</p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-            {t.plan && (
-              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
-                {PLAN_LABELS[t.plan] ?? t.plan}
-              </span>
-            )}
-            {t.status && (
-              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${getStatusBadge(t.status)}`}>
-                {STATUS_LABELS[t.status] ?? t.status}
-              </span>
-            )}
-          </div>
+    <div className="flex flex-col h-full">
+      {/* ── Status banner ─────────────────────────────────────────── */}
+      {(t.status === 'past_due' || t.status === 'locked' || t.cancel_at_period_end) && (
+        <div className={`px-6 py-3 flex items-center gap-2.5 text-sm ${
+          t.status === 'locked' ? 'bg-red-950/60 border-b border-red-800/40 text-red-300' :
+          t.status === 'past_due' ? 'bg-red-500/10 border-b border-red-500/20 text-red-300' :
+          'bg-orange-500/10 border-b border-orange-500/20 text-orange-300'
+        }`}>
+          {t.status === 'locked' ? <Lock className="w-4 h-4 shrink-0" /> :
+           t.status === 'past_due' ? <AlertTriangle className="w-4 h-4 shrink-0" /> :
+           <XCircle className="w-4 h-4 shrink-0" />}
+          <span>
+            {t.status === 'locked' && 'Račun zaključan — nema pristupa'}
+            {t.status === 'past_due' && `Plaćanje nije uspjelo${t.locked_at ? ` · lock za ${Math.max(0, differenceInDays(new Date(t.locked_at), now))}d` : ''}`}
+            {t.cancel_at_period_end && t.status !== 'locked' && t.status !== 'past_due' &&
+              `Otkazuje — pristup do ${t.current_period_end ? format(new Date(t.current_period_end), 'd. M. yyyy.', { locale: hr }) : '—'}`}
+          </span>
         </div>
-      </SheetHeader>
+      )}
 
-      <div className="mt-5 space-y-4 px-0">
-        {/* Alerts */}
-        {t.status === 'past_due' && (
-          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-300">
-              Plaćanje nije uspjelo.{t.locked_at && ` Zaključava se za ${Math.max(0, differenceInDays(new Date(t.locked_at), now))} dana.`}
-            </p>
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        {/* ── Header ────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-4">
+          <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-lg font-bold shrink-0 ${avatarColor}`}>
+            {initials}
           </div>
-        )}
-        {t.status === 'locked' && (
-          <div className="flex items-start gap-2 bg-red-900/20 border border-red-800/30 rounded-lg p-3">
-            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-400">Račun je zaključan. Trener nema pristup.</p>
-          </div>
-        )}
-        {t.cancel_at_period_end && (
-          <div className="flex items-start gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
-            <XCircle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-orange-300">
-              Otkazao — pristup do {t.current_period_end ? format(new Date(t.current_period_end), 'd. M. yyyy') : '—'}
-            </p>
-          </div>
-        )}
-
-        {/* ID + Registracija */}
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">ID</span>
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-mono text-muted-foreground truncate max-w-[220px]">{t.id}</span>
-              <CopyButton value={t.id} />
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">Email</span>
-            <div className="flex items-center gap-1">
-              <span className="text-xs truncate max-w-[220px]">{t.email}</span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold leading-tight truncate">{t.full_name}</h2>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-sm text-muted-foreground truncate">{t.email}</span>
               <CopyButton value={t.email} />
             </div>
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">Registracija</span>
-            <span className="text-xs">{format(new Date(t.created_at), 'd. M. yyyy. HH:mm')}</span>
-          </div>
         </div>
 
-        <Separator />
-
-        {/* Pretplata */}
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pretplata</p>
-
-          {ctx && (
-            <div className={`text-xs font-medium px-2.5 py-1.5 rounded-md border w-fit ${
-              ctx.color.includes('red') ? 'border-red-500/30 bg-red-500/10' :
-              ctx.color.includes('orange') ? 'border-orange-500/30 bg-orange-500/10' :
-              ctx.color.includes('yellow') ? 'border-yellow-500/30 bg-yellow-500/10' :
-              'border-border bg-muted/30'
-            } ${ctx.color}`}>
-              {ctx.label}
-            </div>
+        {/* Badges row */}
+        <div className="flex flex-wrap gap-2">
+          {t.plan && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${getPlanBadge(t.plan)}`}>
+              {PLAN_LABELS[t.plan] ?? t.plan}
+            </span>
           )}
+          {t.status && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${getStatusBadge(t.status)}`}>
+              {STATUS_LABELS[t.status] ?? t.status}
+            </span>
+          )}
+          {isAmbassador && (
+            <span className="text-xs px-2.5 py-1 rounded-full border font-medium bg-amber-500/20 text-amber-300 border-amber-500/30 flex items-center gap-1">
+              <Star className="w-3 h-3" /> Ambassador
+            </span>
+          )}
+          {ctx && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+              ctx.color.includes('red') ? 'border-red-500/30 bg-red-500/10 text-red-400' :
+              ctx.color.includes('orange') ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' :
+              'border-yellow-500/30 bg-yellow-500/10 text-yellow-400'
+            }`}>
+              {ctx.label}
+            </span>
+          )}
+        </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {t.client_limit && (
-              <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
-                <p className="text-xs text-muted-foreground">Limit klijenata</p>
-                <p className="text-lg font-bold mt-0.5">{t.client_limit}</p>
-              </div>
-            )}
-            {t.plan && (
-              <div className="bg-muted/30 rounded-lg border border-border p-2.5 text-center">
-                <p className="text-xs text-muted-foreground">Cijena</p>
-                <p className="text-lg font-bold mt-0.5">
-                  {t.plan === 'ambassador' ? <span className="text-amber-400">Besplatno</span> : <>€{t.plan ? effectivePrice(t) : '—'}<span className="text-xs font-normal text-muted-foreground">/mj</span></>}
-                </p>
-              </div>
-            )}
+        {/* ── Subscription stats grid ────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-2">
+          <StatTile
+            icon={<CreditCard className="w-4 h-4" />}
+            label="Cijena"
+            value={isAmbassador ? 'Besplatno' : `€${price}/mj`}
+            valueClass={isAmbassador ? 'text-amber-400' : 'text-foreground'}
+          />
+          <StatTile
+            icon={<User className="w-4 h-4" />}
+            label="Klijenti"
+            value={t.client_limit ? `${t.client_limit}` : '—'}
+          />
+          <StatTile
+            icon={<CalendarDays className="w-4 h-4" />}
+            label="Registracija"
+            value={format(new Date(t.created_at), 'd. M. yy.')}
+          />
+        </div>
+
+        {/* ── Trial progress bar ─────────────────────────────────── */}
+        {t.status === 'trialing' && t.trial_start && t.trial_end && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" /> Trial
+              </span>
+              <span className="font-medium">
+                Dan {trialUsed} / {trialDuration}
+                <span className="text-muted-foreground ml-1.5">
+                  ({differenceInDays(new Date(t.trial_end), now)}d ostalo)
+                </span>
+              </span>
+            </div>
+            <Progress value={trialPct} className="h-2" />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{format(new Date(t.trial_start), 'd. M. yyyy.')}</span>
+              <span className="font-medium text-yellow-400">
+                1. naplata: {format(new Date(t.trial_end), 'd. M. yyyy.')}
+                {price > 0 && ` · €${price}`}
+              </span>
+            </div>
           </div>
+        )}
 
-          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-            {t.status === 'trialing' && t.trial_start && (
-              <Row label="Trial počeo" value={format(new Date(t.trial_start), 'd. M. yyyy')} />
-            )}
-            {t.status === 'trialing' && t.trial_end && (
-              <>
-                <Row
-                  label="Trial završava"
-                  value={format(new Date(t.trial_end), 'd. M. yyyy')}
-                  highlight={differenceInDays(new Date(t.trial_end), now) <= 3 ? 'red' : differenceInDays(new Date(t.trial_end), now) <= 7 ? 'yellow' : undefined}
+        {/* ── Subscription timeline ──────────────────────────────── */}
+        {(t.current_period_start || t.current_period_end || t.locked_at) && (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pretplata</p>
+            <div className="space-y-0 border border-border rounded-xl overflow-hidden divide-y divide-border">
+              {t.current_period_start && t.status !== 'trialing' && (
+                <TimelineRow
+                  icon={<RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />}
+                  label="Period počeo"
+                  value={format(new Date(t.current_period_start), 'd. MMMM yyyy.', { locale: hr })}
                 />
-                <Row
-                  label="1. naplata"
-                  value={`${format(new Date(t.trial_end), 'd. M. yyyy')} · ${t.plan === 'ambassador' ? 'Besplatno' : `€${t.plan ? effectivePrice(t) : '—'}`}`}
+              )}
+              {t.current_period_end && (
+                <TimelineRow
+                  icon={t.cancel_at_period_end
+                    ? <TrendingDown className="w-3.5 h-3.5 text-orange-400" />
+                    : <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />}
+                  label={t.cancel_at_period_end ? 'Pristup istječe' : 'Sljedeća naplata'}
+                  value={format(new Date(t.current_period_end), 'd. MMMM yyyy.', { locale: hr })}
+                  valueClass={t.cancel_at_period_end ? 'text-orange-400' : 'text-emerald-400'}
+                  extra={!t.cancel_at_period_end && price > 0 ? `€${price}` : undefined}
                 />
-              </>
-            )}
-            {!['trialing'].includes(t.status ?? '') && t.current_period_start && (
-              <Row label="Period počeo" value={format(new Date(t.current_period_start), 'd. M. yyyy')} />
-            )}
-            {t.current_period_end && (
-              <Row
-                label={t.cancel_at_period_end ? 'Pristup do' : 'Sljedeća naplata'}
-                value={format(new Date(t.current_period_end), 'd. M. yyyy')}
-                highlight={t.cancel_at_period_end ? 'yellow' : undefined}
-              />
-            )}
-            {t.locked_at && (
-              <Row label="Zaključan" value={format(new Date(t.locked_at), 'd. M. yyyy HH:mm')} highlight="red" />
-            )}
+              )}
+              {t.locked_at && (
+                <TimelineRow
+                  icon={<Lock className="w-3.5 h-3.5 text-red-400" />}
+                  label="Zaključan"
+                  value={format(new Date(t.locked_at), 'd. MMMM yyyy. HH:mm', { locale: hr })}
+                  valueClass="text-red-400"
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Meta info ──────────────────────────────────────────── */}
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Info</p>
+          <div className="border border-border rounded-xl overflow-hidden divide-y divide-border">
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-muted-foreground">ID</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-mono text-muted-foreground">{t.id.slice(0, 18)}…</span>
+                <CopyButton value={t.id} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-muted-foreground">Email</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs">{t.email}</span>
+                <CopyButton value={t.email} />
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* ── Stripe ─────────────────────────────────────────────── */}
         {(t.stripe_customer_id || t.stripe_subscription_id) && (
-          <>
-            <Separator />
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stripe</p>
-              <div className="flex flex-col gap-2">
-                {t.stripe_customer_id && (
-                  <a
-                    href={`https://dashboard.stripe.com/customers/${t.stripe_customer_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2"
-                  >
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                    Otvori Customer u Stripeu
-                  </a>
-                )}
-                {t.stripe_subscription_id && (
-                  <a
-                    href={`https://dashboard.stripe.com/subscriptions/${t.stripe_subscription_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2"
-                  >
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                    Otvori Subscription u Stripeu
-                  </a>
-                )}
-              </div>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Stripe</p>
+            <div className="flex gap-2 flex-wrap">
+              {t.stripe_customer_id && (
+                <a
+                  href={`https://dashboard.stripe.com/customers/${t.stripe_customer_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/8 border border-blue-500/20 rounded-lg px-3 py-2"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Customer
+                </a>
+              )}
+              {t.stripe_subscription_id && (
+                <a
+                  href={`https://dashboard.stripe.com/subscriptions/${t.stripe_subscription_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/8 border border-blue-500/20 rounded-lg px-3 py-2"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Subscription
+                </a>
+              )}
             </div>
-          </>
+          </div>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
-function Row({ label, value, mono, highlight }: {
-  label: string
-  value: string
-  mono?: boolean
-  highlight?: 'red' | 'yellow'
-}) {
-  const valueClass = highlight === 'red'
-    ? 'text-red-400'
-    : highlight === 'yellow'
-    ? 'text-yellow-400'
-    : mono
-    ? 'font-mono text-xs text-muted-foreground'
-    : 'text-sm'
-
+function StatTile({
+  icon, label, value, valueClass = '',
+}: { icon: React.ReactNode; label: string; value: string; valueClass?: string }) {
   return (
-    <div className="flex justify-between items-start gap-4">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-right break-all ${valueClass}`}>{value}</span>
+    <div className="bg-muted/30 border border-border rounded-xl p-3 flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 text-muted-foreground">{icon}<span className="text-[10px] font-medium uppercase tracking-wide">{label}</span></div>
+      <p className={`text-base font-bold leading-tight ${valueClass}`}>{value}</p>
+    </div>
+  )
+}
+
+function TimelineRow({
+  icon, label, value, valueClass = 'text-foreground', extra,
+}: { icon: React.ReactNode; label: string; value: string; valueClass?: string; extra?: string }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className="shrink-0">{icon}</span>
+      <span className="text-xs text-muted-foreground flex-1">{label}</span>
+      <div className="flex items-center gap-2 text-right">
+        <span className={`text-xs font-medium ${valueClass}`}>{value}</span>
+        {extra && <span className="text-xs font-bold text-emerald-400">{extra}</span>}
+      </div>
     </div>
   )
 }

@@ -134,7 +134,7 @@ export function PrezentacijeClient({ bookings: initial }: { bookings: Booking[] 
           Nema zahtjeva za odabrani filter.
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 overflow-y-auto max-h-[60vh] md:max-h-[65vh]">
           {filtered.map(b => (
             <div
               key={b.id}

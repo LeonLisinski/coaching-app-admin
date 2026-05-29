@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, BarChart3, Users, CalendarDays,
+  LayoutDashboard, BarChart3, Users, CalendarDays, CalendarCheck,
   Mail, Vault, StickyNote, Settings, type LucideIcon,
 } from 'lucide-react'
 
@@ -12,17 +12,18 @@ export type NavItem = {
 
 /** Shown as bottom-nav tabs on mobile and the top group on desktop. */
 export const primaryNav: NavItem[] = [
-  { href: '/',              label: 'Pregled',      icon: LayoutDashboard },
-  { href: '/financije',     label: 'Financije',    mobileLabel: 'Fin.', icon: BarChart3 },
-  { href: '/treneri',       label: 'Treneri',      icon: Users },
-  { href: '/prezentacije',  label: 'Prezentacije', mobileLabel: 'Demo', icon: CalendarDays },
+  { href: '/',             label: 'Pregled',      icon: LayoutDashboard },
+  { href: '/financije',    label: 'Financije',    mobileLabel: 'Fin.', icon: BarChart3 },
+  { href: '/prezentacije', label: 'Prezentacije', mobileLabel: 'Demo', icon: CalendarDays },
+  { href: '/kalendar',     label: 'Kalendar',     icon: CalendarCheck },
 ]
 
 /** Secondary tools — desktop "Alati" group + mobile "Više" sheet. */
 export const toolsNav: NavItem[] = [
-  { href: '/mailer', label: 'Mailer', icon: Mail },
-  { href: '/sef',    label: 'Sef',    icon: Vault },
-  { href: '/notes',  label: 'Notes',  icon: StickyNote },
+  { href: '/treneri', label: 'Treneri', icon: Users },
+  { href: '/mailer',  label: 'Mailer',  icon: Mail },
+  { href: '/sef',     label: 'Sef',     icon: Vault },
+  { href: '/notes',   label: 'Notes',   icon: StickyNote },
 ]
 
 export const settingsNav: NavItem[] = [

@@ -1,9 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { format } from 'date-fns'
 import {
   TrendingUp, DollarSign, Clock, AlertTriangle,
   TrendingDown, Lock, CalendarClock, CheckCircle2,
+  Activity, Loader2, Check, MessageSquare,
+  Filter, BarChart3, Sparkles,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -23,6 +26,21 @@ interface HistoryRow { month: string; new: number; churned: number; active: numb
 
 interface AmbassadorRow { trainer_id: string; full_name: string; email: string; plan: string; status: string; created_at: string }
 
+interface ChurnStats {
+  rateThisMonth: number
+  rateLastMonth: number
+  countThisMonth: number
+  countLastMonth: number
+  avgLifetimeMonths: number
+  ltv: number
+  alert: boolean
+  reasonBreakdown: Array<{ reason: string; count: number }>
+}
+
+interface FunnelMonth { label: string; registered: number; trialed: number; converted: number; churned: number }
+interface FunnelTotals { registered: number; trialed: number; converted: number; churned: number }
+interface ForecastMonth { label: string; revenue: number; lost: number; month: string }
+
 interface Props {
   mrr: number; arr: number; pipeline: number; atRiskRevenue: number; churningRevenue: number
   activeCount: number; trialCount: number; pastDueCount: number; lockedCount: number; canceledCount: number; churningCount: number
@@ -36,6 +54,11 @@ interface Props {
   historyData: HistoryRow[]
   ambassadorCount: number
   ambassadorDetails: AmbassadorRow[]
+  churnStats: ChurnStats
+  feedbackByTrainer: Record<string, { reason: string; note: string | null; created_at: string }>
+  funnelData: FunnelMonth[]
+  funnelTotals: FunnelTotals
+  forecastMonths: ForecastMonth[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -67,16 +90,62 @@ const PLAN_COLORS: Record<string, string> = { starter: '#71717a', pro: '#3b82f6'
 
 // ── Component ─────────────────────────────────────────────────────────────
 
+const CHURN_REASONS = [
+  { value: 'cijena', label: 'Cijena previsoka' },
+  { value: 'feature', label: 'Nedostaje feature' },
+  { value: 'konkurent', label: 'Prešao na konkurenta' },
+  { value: 'pauza', label: 'Privremena pauza' },
+  { value: 'ostalo', label: 'Ostalo' },
+]
+
+const REASON_COLORS: Record<string, string> = {
+  cijena: 'bg-red-500/20 text-red-300 border-red-500/30',
+  feature: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  konkurent: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+  pauza: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  ostalo: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
+}
+
+function reasonLabel(r: string) {
+  return CHURN_REASONS.find(x => x.value === r)?.label ?? r
+}
+
 export function FinancijeClient({
   mrr, arr, pipeline, atRiskRevenue, churningRevenue,
   activeCount, trialCount, pastDueCount, lockedCount, canceledCount, churningCount,
   planBreakdown, chartData, atRiskDetails, churningDetails, trialDetails,
   upcomingEvents, upcomingRevenue, historyData,
   ambassadorCount, ambassadorDetails,
+  churnStats, feedbackByTrainer: initialFeedback,
+  funnelData, funnelTotals, forecastMonths,
 }: Props) {
 
-  const totalActive = activeCount + trialCount
-  const upcomingIn7 = upcomingEvents.filter(e => e.daysLeft <= 7).length
+  const [feedback, setFeedback] = useState(initialFeedback)
+  const [pendingReason, setPendingReason] = useState<Record<string, string>>({})
+  const [pendingNote, setPendingNote] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
+  const [saved, setSaved] = useState<Record<string, boolean>>({})
+
+  async function saveFeedback(trainerId: string) {
+    const reason = pendingReason[trainerId]
+    if (!reason) return
+    setSaving(p => ({ ...p, [trainerId]: true }))
+    const note = pendingNote[trainerId] ?? null
+    const res = await fetch('/api/churn-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trainer_id: trainerId, reason, note }),
+    })
+    setSaving(p => ({ ...p, [trainerId]: false }))
+    if (res.ok) {
+      setFeedback(p => ({ ...p, [trainerId]: { reason, note, created_at: new Date().toISOString() } }))
+      setPendingReason(p => { const n = { ...p }; delete n[trainerId]; return n })
+      setPendingNote(p => { const n = { ...p }; delete n[trainerId]; return n })
+      setSaved(p => ({ ...p, [trainerId]: true }))
+      setTimeout(() => setSaved(p => ({ ...p, [trainerId]: false })), 2000)
+    }
+  }
+
   const upcomingConverts = upcomingEvents.filter(e => e.type === 'trial_converts').length
 
   return (
@@ -94,7 +163,7 @@ export function FinancijeClient({
             <TrendingUp className="w-4 h-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">€{mrr.toLocaleString()}</p>
+            <p className="text-2xl font-bold">€{mrr.toLocaleString('hr')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{activeCount} plaća · trialing ne računa</p>
           </CardContent>
         </Card>
@@ -104,7 +173,7 @@ export function FinancijeClient({
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">€{arr.toLocaleString()}</p>
+            <p className="text-2xl font-bold">€{arr.toLocaleString('hr')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">MRR × 12</p>
           </CardContent>
         </Card>
@@ -114,7 +183,7 @@ export function FinancijeClient({
             <Clock className="w-4 h-4 text-yellow-400" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-yellow-400">€{pipeline.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-yellow-400">€{pipeline.toLocaleString('hr')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{trialCount} triala · besplatno</p>
           </CardContent>
         </Card>
@@ -124,7 +193,7 @@ export function FinancijeClient({
             <AlertTriangle className="w-4 h-4 text-red-400" />
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${atRiskRevenue > 0 ? 'text-red-400' : ''}`}>€{atRiskRevenue.toLocaleString()}</p>
+            <p className={`text-2xl font-bold ${atRiskRevenue > 0 ? 'text-red-400' : ''}`}>€{atRiskRevenue.toLocaleString('hr')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{pastDueCount} kasni · {lockedCount} zaključano</p>
           </CardContent>
         </Card>
@@ -134,7 +203,7 @@ export function FinancijeClient({
             <TrendingDown className="w-4 h-4 text-orange-400" />
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${churningRevenue > 0 ? 'text-orange-400' : ''}`}>€{churningRevenue.toLocaleString()}</p>
+            <p className={`text-2xl font-bold ${churningRevenue > 0 ? 'text-orange-400' : ''}`}>€{churningRevenue.toLocaleString('hr')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{churningCount} otkazuje</p>
           </CardContent>
         </Card>
@@ -156,6 +225,79 @@ export function FinancijeClient({
         ))}
       </div>
 
+      {/* Churn analytics */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+          <Activity className="w-4 h-4" /> Churn analitika
+        </h2>
+        {churnStats.alert && (
+          <div className="mb-3 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-sm text-red-300">
+              <strong>Upozorenje:</strong> Churn rate ovog mjeseca je{' '}
+              <strong>{churnStats.rateThisMonth}%</strong> — iznad 10% praga.
+            </p>
+          </div>
+        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card className={churnStats.alert ? 'border-red-500/30 bg-red-500/5' : ''}>
+            <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-xs text-muted-foreground">Churn ovaj mj.</CardTitle>
+              <TrendingDown className={`w-4 h-4 ${churnStats.alert ? 'text-red-400' : 'text-muted-foreground'}`} />
+            </CardHeader>
+            <CardContent>
+              <p className={`text-2xl font-bold ${churnStats.alert ? 'text-red-400' : ''}`}>
+                {churnStats.rateThisMonth}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{churnStats.countThisMonth} otkazano</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-xs text-muted-foreground">Churn prošli mj.</CardTitle>
+              <TrendingDown className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-baseline gap-1.5">
+                <p className="text-2xl font-bold">{churnStats.rateLastMonth}%</p>
+                {churnStats.rateThisMonth !== churnStats.rateLastMonth && (
+                  <span className={`text-xs font-medium ${churnStats.rateThisMonth > churnStats.rateLastMonth ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {churnStats.rateThisMonth > churnStats.rateLastMonth ? '↑' : '↓'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{churnStats.countLastMonth} otkazano</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-xs text-muted-foreground">Avg. životni vijek</CardTitle>
+              <Clock className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">
+                {churnStats.avgLifetimeMonths > 0 ? `${churnStats.avgLifetimeMonths}mj` : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {canceledCount} otkazanih pretplata
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-xs text-muted-foreground">LTV (procjena)</CardTitle>
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-emerald-400">
+                {churnStats.ltv > 0 ? `€${churnStats.ltv.toLocaleString('hr')}` : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">avg prihod × avg trajanje</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Upcoming + Plan breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Nadolazeći prihodi */}
@@ -169,7 +311,7 @@ export function FinancijeClient({
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   Očekivani prihod:{' '}
-                  <span className="text-emerald-400 font-bold">€{upcomingRevenue.toLocaleString()}</span>
+                  <span className="text-emerald-400 font-bold">€{upcomingRevenue.toLocaleString('hr')}</span>
                   {upcomingConverts > 0 && (
                     <span className="text-yellow-400 ml-2">· {upcomingConverts} triala konvertira</span>
                   )}
@@ -245,7 +387,7 @@ export function FinancijeClient({
                   </span>
                   <span className="text-center font-mono font-semibold">{row.active}</span>
                   <span className="text-center font-mono text-yellow-400">{row.trialing}</span>
-                  <span className="text-right font-semibold">€{row.revenue.toLocaleString()}</span>
+                  <span className="text-right font-semibold">€{row.revenue.toLocaleString('hr')}</span>
                 </div>
               ))}
               {ambassadorCount > 0 && (
@@ -262,7 +404,7 @@ export function FinancijeClient({
                 <span className="text-muted-foreground">Ukupno</span>
                 <span className="text-center">{activeCount + ambassadorCount}</span>
                 <span className="text-center text-yellow-400">{trialCount}</span>
-                <span className="text-right text-blue-400">€{mrr.toLocaleString()}</span>
+                <span className="text-right text-blue-400">€{mrr.toLocaleString('hr')}</span>
               </div>
             </div>
 
@@ -293,6 +435,133 @@ export function FinancijeClient({
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
+
+      {/* ── Conversion funnel ──────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+          <Filter className="w-4 h-4" /> Conversion funnel (ukupno)
+        </h2>
+        <div className="rounded-xl border border-border overflow-hidden">
+          {/* All-time funnel steps */}
+          <div className="grid grid-cols-4 divide-x divide-border">
+            {[
+              { label: 'Registrirani', value: funnelTotals.registered, color: 'text-blue-400', bg: '' },
+              { label: 'Trial', value: funnelTotals.trialed, color: 'text-yellow-400', bg: '' },
+              { label: 'Plaćajući', value: funnelTotals.converted, color: 'text-emerald-400', bg: '' },
+              { label: 'Otkazali', value: funnelTotals.churned, color: 'text-red-400', bg: '' },
+            ].map((step, i) => {
+              const pct = funnelTotals.registered > 0
+                ? Math.round((step.value / funnelTotals.registered) * 100)
+                : 0
+              const convRate = i > 0 && funnelTotals.registered > 0
+                ? Math.round((step.value / (i === 1 ? funnelTotals.registered : i === 2 ? funnelTotals.trialed : funnelTotals.converted)) * 100)
+                : null
+              return (
+                <div key={step.label} className="p-4 text-center space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{step.label}</p>
+                  <p className={`text-2xl font-bold ${step.color}`}>{step.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{pct}% ukupnih</p>
+                  {convRate !== null && i < 3 && (
+                    <p className={`text-[10px] font-medium ${i === 2 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+                      {i === 1 ? `→ ${convRate}% triala` : i === 2 ? `→ ${convRate}% konv.` : ''}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Progress bar funnel visualization */}
+          <div className="px-4 pb-4 space-y-1.5">
+            {[
+              { label: 'Registrirani', value: funnelTotals.registered, color: 'bg-blue-500' },
+              { label: 'Trial', value: funnelTotals.trialed, color: 'bg-yellow-500' },
+              { label: 'Plaćajući', value: funnelTotals.converted, color: 'bg-emerald-500' },
+              { label: 'Otkazali', value: funnelTotals.churned, color: 'bg-red-500' },
+            ].map(step => (
+              <div key={step.label} className="flex items-center gap-3">
+                <span className="text-[10px] text-muted-foreground w-20 text-right shrink-0">{step.label}</span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${step.color}`}
+                    style={{ width: funnelTotals.registered > 0 ? `${(step.value / funnelTotals.registered) * 100}%` : '0%' }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground w-6 shrink-0">{step.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Monthly breakdown */}
+          {funnelData.length > 0 && (
+            <div className="border-t border-border">
+              <div className="grid grid-cols-[70px_1fr_1fr_1fr_1fr] gap-0 px-4 py-2 bg-muted/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                <span>Mj.</span><span className="text-center">Novi</span><span className="text-center">Trial</span><span className="text-center">Konv.</span><span className="text-center">Churn</span>
+              </div>
+              {funnelData.map(row => {
+                const convRate = row.trialed > 0 ? Math.round((row.converted / row.trialed) * 100) : null
+                return (
+                  <div key={row.label} className="grid grid-cols-[70px_1fr_1fr_1fr_1fr] gap-0 px-4 py-2.5 border-t border-border/50 text-xs items-center">
+                    <span className="text-muted-foreground font-medium">{row.label}</span>
+                    <span className="text-center font-bold text-blue-400">{row.registered || '—'}</span>
+                    <span className="text-center font-bold text-yellow-400">{row.trialed || '—'}</span>
+                    <span className="text-center">
+                      <span className="font-bold text-emerald-400">{row.converted || '—'}</span>
+                      {convRate !== null && row.trialed > 0 && (
+                        <span className="text-[9px] text-muted-foreground ml-1">({convRate}%)</span>
+                      )}
+                    </span>
+                    <span className="text-center font-bold text-red-400">{row.churned || '—'}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Revenue forecast ───────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4" /> Prognoza prihoda (sljedeća 3 mj.)
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Procjena bazirana na aktivnim pretplatama i poznatim datumima obnove/isteka. Ne uključuje potencijalni novi churn.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {forecastMonths.map((m, i) => (
+            <Card key={m.month} className={i === 0 ? 'border-blue-500/30 bg-blue-500/5' : ''}>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-xs text-muted-foreground">{m.label}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-1">
+                <p className={`text-xl font-bold ${i === 0 ? 'text-blue-400' : ''}`}>
+                  €{m.revenue.toLocaleString('hr')}
+                </p>
+                {m.lost > 0 && (
+                  <p className="text-[10px] text-orange-400">
+                    −€{m.lost.toLocaleString('hr')} od otkazivanja
+                  </p>
+                )}
+                {m.lost === 0 && (
+                  <p className="text-[10px] text-muted-foreground">bez poznatih otkazivanja</p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-1.5">
+          <BarChart3 className="w-3 h-3 text-muted-foreground" />
+          <p className="text-[10px] text-muted-foreground">
+            Trenutni MRR: <span className="text-blue-400 font-semibold">€{mrr.toLocaleString('hr')}</span>
+            {forecastMonths[0] && forecastMonths[0].revenue > mrr && (
+              <span className="text-emerald-400 ml-2">
+                +€{(forecastMonths[0].revenue - mrr).toLocaleString('hr')} od triala koji konvertiraju
+              </span>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* Detalji tabovi */}
@@ -330,6 +599,15 @@ export function FinancijeClient({
               </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="churn-razlozi">
+            <MessageSquare className="w-3.5 h-3.5 mr-1" />
+            Razlozi
+            {churnStats.reasonBreakdown.length > 0 && (
+              <span className="ml-1.5 bg-violet-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {churnStats.reasonBreakdown.reduce((s, r) => s + r.count, 0)}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="povijest">Povijest</TabsTrigger>
         </TabsList>
 
@@ -338,13 +616,13 @@ export function FinancijeClient({
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {trialCount} korisnika koristi besplatni 14-dnevni trial · Pipeline vrijednost:{' '}
-              <span className="text-yellow-400 font-semibold">€{pipeline.toLocaleString()}/mj</span>
+              <span className="text-yellow-400 font-semibold">€{pipeline.toLocaleString('hr')}/mj</span>
             </p>
           </div>
           {trialDetails.length === 0 ? (
             <EmptyState icon={<Clock className="w-8 h-8" />} text="Nema korisnika u trialu." />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto max-h-[60vh]">
               {trialDetails.map(r => (
                 <div key={r.trainer_id} className={`border rounded-lg p-4 space-y-3 ${
                   r.daysLeft !== null && r.daysLeft <= 3
@@ -417,8 +695,8 @@ export function FinancijeClient({
           {atRiskDetails.length === 0 ? (
             <EmptyState icon={<AlertTriangle className="w-8 h-8" />} text="Nema at-risk korisnika." />
           ) : (
-            <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
-              <div className="bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+            <div className="border border-border rounded-lg overflow-hidden divide-y divide-border max-h-[55vh] overflow-y-auto">
+              <div className="bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground sticky top-0">
                 Past_due = 3 dana grace period · Nakon toga → Locked (nema pristupa)
               </div>
               {atRiskDetails.map(r => (
@@ -457,28 +735,91 @@ export function FinancijeClient({
           {churningDetails.length === 0 ? (
             <EmptyState icon={<TrendingDown className="w-8 h-8" />} text="Nema korisnika koji otkazuju." />
           ) : (
-            <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
-              <div className="bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
-                Korisnici koji su otkazali — pristup imaju do kraja plaćenog perioda
-              </div>
-              {churningDetails.map(r => (
-                <div key={r.trainer_id} className="flex items-center justify-between p-4 gap-4">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm">{r.full_name}</p>
-                    <p className="text-muted-foreground text-xs">{r.email}</p>
+            <div className="space-y-2 max-h-[65vh] overflow-y-auto">
+              <p className="text-xs text-muted-foreground px-1">
+                Korisnici koji su otkazali — pristup imaju do kraja plaćenog perioda.
+                Označi razlog otkazivanja za analitiku.
+              </p>
+              {churningDetails.map(r => {
+                const existing = feedback[r.trainer_id]
+                const chosen = pendingReason[r.trainer_id] ?? existing?.reason ?? ''
+                const noteVal = pendingNote[r.trainer_id] ?? existing?.note ?? ''
+                const isSaving = saving[r.trainer_id]
+                const isSaved = saved[r.trainer_id]
+                const isDirty = pendingReason[r.trainer_id] !== undefined
+
+                return (
+                  <div key={r.trainer_id} className="border border-border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{r.full_name}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded border font-medium ${planBadge(r.plan)}`}>
+                            {PLAN_LABELS[r.plan] ?? r.plan}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-xs mt-0.5">{r.email}</p>
+                      </div>
+                      {r.current_period_end && (
+                        <span className={`text-xs font-mono font-semibold shrink-0 ${daysColor(r.daysLeft)}`}>
+                          {format(new Date(r.current_period_end), 'd. M.')} ({r.daysLeft}d)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Reason picker */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Razlog otkazivanja</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CHURN_REASONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setPendingReason(p => ({ ...p, [r.trainer_id]: opt.value }))}
+                            className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-all ${
+                              chosen === opt.value
+                                ? REASON_COLORS[opt.value]
+                                : 'border-border text-muted-foreground hover:border-zinc-500'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {chosen && (
+                        <input
+                          placeholder="Dodatna napomena (opcionalno)..."
+                          value={noteVal}
+                          onChange={e => setPendingNote(p => ({ ...p, [r.trainer_id]: e.target.value }))}
+                          className="w-full text-xs bg-muted/40 border border-border rounded px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-border"
+                        />
+                      )}
+                      {(isDirty || existing) && (
+                        <div className="flex items-center gap-2">
+                          {isDirty && (
+                            <button
+                              onClick={() => saveFeedback(r.trainer_id)}
+                              disabled={isSaving || !chosen}
+                              className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-md font-medium transition-colors"
+                            >
+                              {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                               isSaved ? <Check className="w-3 h-3" /> : null}
+                              {isSaved ? 'Spremljeno' : 'Spremi'}
+                            </button>
+                          )}
+                          {existing && !isDirty && (
+                            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${REASON_COLORS[existing.reason] ?? ''}`}>
+                              {reasonLabel(existing.reason)}
+                            </span>
+                          )}
+                          {existing && !isDirty && existing.note && (
+                            <span className="text-xs text-muted-foreground">{existing.note}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${planBadge(r.plan)}`}>
-                      {PLAN_LABELS[r.plan] ?? r.plan}
-                    </span>
-                    {r.current_period_end && (
-                      <span className={`text-xs font-mono font-semibold ${daysColor(r.daysLeft)}`}>
-                        Istječe {format(new Date(r.current_period_end), 'd. M.')} ({r.daysLeft}d)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </TabsContent>
@@ -488,7 +829,7 @@ export function FinancijeClient({
           {ambassadorDetails.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nema ambasadora.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto max-h-[55vh]">
               {ambassadorDetails.map(r => (
                 <div key={r.trainer_id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3 gap-3">
                   <div className="min-w-0">
@@ -509,13 +850,68 @@ export function FinancijeClient({
           )}
         </TabsContent>
 
+        {/* Churn razlozi */}
+        <TabsContent value="churn-razlozi" className="mt-4">
+          {churnStats.reasonBreakdown.length === 0 ? (
+            <EmptyState
+              icon={<MessageSquare className="w-8 h-8" />}
+              text="Nema zabilježenih razloga. Označi razlog otkazivanja u tabu 'Otkazuju'."
+            />
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Ukupno označenih otkazivanja:{' '}
+                <strong>{churnStats.reasonBreakdown.reduce((s, r) => s + r.count, 0)}</strong>
+              </p>
+              <div className="space-y-2">
+                {churnStats.reasonBreakdown.map(row => {
+                  const total = churnStats.reasonBreakdown.reduce((s, r) => s + r.count, 0)
+                  const pct = Math.round((row.count / total) * 100)
+                  return (
+                    <div key={row.reason} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded border font-medium ${REASON_COLORS[row.reason] ?? 'bg-muted text-muted-foreground border-border'}`}>
+                            {reasonLabel(row.reason)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold">{row.count}×</span>
+                          <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor:
+                              row.reason === 'cijena' ? 'rgb(248,113,113)' :
+                              row.reason === 'feature' ? 'rgb(251,146,60)' :
+                              row.reason === 'konkurent' ? 'rgb(167,139,250)' :
+                              row.reason === 'pauza' ? 'rgb(96,165,250)' :
+                              'rgb(161,161,170)',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground pt-2">
+                Razlozi se prikupljaju ručno — idi na tab &quot;Otkazuju&quot; i označi razlog za svakog korisnika koji je otkazao.
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="povijest" className="mt-4">
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
               MRR je procjena — rekonstruira se iz pretplata aktivnih krajem tog mjeseca. Churn = datum otkazivanja.
             </p>
             <div className="border border-border rounded-lg divide-y divide-border">
-              {[...historyData].reverse().map((row, i) => {
+              {[...historyData].reverse().filter((row, i) => i === 0 || row.active > 0 || row.new > 0 || row.churned > 0).map((row, i) => {
                 const net = row.new - row.churned
                 const isCurrentMonth = i === 0
                 return (
@@ -554,7 +950,7 @@ export function FinancijeClient({
                     {/* MRR */}
                     <div className="shrink-0 text-right">
                       <p className={`text-sm font-bold ${row.mrr > 0 ? 'text-blue-400' : 'text-muted-foreground'}`}>
-                        €{row.mrr.toLocaleString()}
+                        €{row.mrr.toLocaleString('hr')}
                       </p>
                       {net !== 0 && (
                         <p className={`text-[10px] font-medium ${net > 0 ? 'text-emerald-400' : 'text-red-400'}`}>

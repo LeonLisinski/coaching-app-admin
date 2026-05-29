@@ -65,6 +65,13 @@ export default async function OverviewPage() {
   const churnCount = churnedSubs?.length ?? 0
   const chartData = buildChartData(historySubs ?? [])
 
+  // Churn rate estimate: active now + churned this month ≈ base at start
+  const estimatedMonthStart = activeCount + churnCount
+  const churnRateThisMonth = estimatedMonthStart > 0
+    ? Math.round((churnCount / estimatedMonthStart) * 100)
+    : 0
+  const churnAlert = churnRateThisMonth >= 10
+
   // Upcoming events — merge billing + trials, sort by date
   type UpcomingEvent = {
     date: string
@@ -116,6 +123,21 @@ export default async function OverviewPage() {
         <p className="text-muted-foreground text-sm mt-1 capitalize">{format(now, 'LLLL yyyy.', { locale: hr })}</p>
       </div>
 
+      {/* Churn alert */}
+      {churnAlert && (
+        <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-red-300 font-medium">Visok churn ovaj mjesec — {churnRateThisMonth}%</p>
+            <p className="text-xs text-red-400/70 mt-0.5">
+              {churnCount} otkazivanja · Idi na{' '}
+              <a href="/financije" className="underline">Financije → Otkazuju</a>{' '}
+              da označiš razloge.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Financije */}
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Financije</h2>
@@ -126,7 +148,7 @@ export default async function OverviewPage() {
             <TrendingUp className="w-4 h-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">€{mrr.toLocaleString()}</div>
+            <div className="text-2xl font-bold">€{mrr.toLocaleString('hr')}</div>
             <p className="text-xs text-muted-foreground mt-1">Samo aktivne pretplate</p>
           </CardContent>
         </Card>
@@ -136,7 +158,7 @@ export default async function OverviewPage() {
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">€{arr.toLocaleString()}</div>
+            <div className="text-2xl font-bold">€{arr.toLocaleString('hr')}</div>
             <p className="text-xs text-muted-foreground mt-1">MRR × 12</p>
           </CardContent>
         </Card>
@@ -146,7 +168,7 @@ export default async function OverviewPage() {
             <Clock className="w-4 h-4 text-yellow-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-400">€{pipeline.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-yellow-400">€{pipeline.toLocaleString('hr')}</div>
             <p className="text-xs text-muted-foreground mt-1">{trialCount} korisnika · još ne plaća</p>
           </CardContent>
         </Card>

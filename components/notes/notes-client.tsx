@@ -174,7 +174,7 @@ export function NotesClient({ notes: initialNotes, tasks: initialTasks }: { note
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-bold">Notes</h1>
 
       <Tabs defaultValue="ideje">

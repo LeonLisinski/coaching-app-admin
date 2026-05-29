@@ -1,15 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
-import { Mail, Send, Users } from 'lucide-react'
+import { Mail, Send, Users, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 
 interface Campaign {
@@ -21,13 +19,13 @@ interface Campaign {
 }
 
 const SEGMENTS = [
-  { value: 'all', label: 'Svi treneri' },
-  { value: 'starter', label: 'Samo Starter' },
-  { value: 'pro', label: 'Samo Pro' },
-  { value: 'scale', label: 'Samo Scale' },
-  { value: 'ambassador', label: 'Samo Ambasadori' },
-  { value: 'active', label: 'Samo aktivni' },
-  { value: 'inactive', label: 'Samo neaktivni (canceled/locked)' },
+  { value: 'all', label: 'Svi treneri', group: 'all' },
+  { value: 'starter', label: 'Starter', group: 'plan' },
+  { value: 'pro', label: 'Pro', group: 'plan' },
+  { value: 'scale', label: 'Scale', group: 'plan' },
+  { value: 'ambassador', label: 'Ambasadori', group: 'plan' },
+  { value: 'active', label: 'Aktivni', group: 'status' },
+  { value: 'inactive', label: 'Neaktivni', group: 'status' },
 ]
 
 export function MailerClient({ campaigns: initialCampaigns }: { campaigns: Campaign[] }) {
@@ -35,22 +33,28 @@ export function MailerClient({ campaigns: initialCampaigns }: { campaigns: Campa
   const [segment, setSegment] = useState('all')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
-  const [recipientCount, setRecipientCount] = useState<number | null>(null)
-  const [loadingCount, setLoadingCount] = useState(false)
+  const [counts, setCounts] = useState<Record<string, number | null>>({})
   const [sending, setSending] = useState(false)
 
-  async function loadRecipientCount(seg: string) {
-    setLoadingCount(true)
-    setSegment(seg)
-    try {
-      const res = await fetch(`/api/mailer/count?segment=${seg}`)
-      const data = await res.json()
-      setRecipientCount(data.count ?? 0)
-    } catch {
-      setRecipientCount(null)
-    }
-    setLoadingCount(false)
-  }
+  const recipientCount = counts[segment] ?? null
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(
+      SEGMENTS.map(async (s) => {
+        try {
+          const res = await fetch(`/api/mailer/count?segment=${s.value}`)
+          const data = await res.json()
+          return [s.value, data.count ?? 0] as const
+        } catch {
+          return [s.value, null] as const
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) setCounts(Object.fromEntries(entries))
+    })
+    return () => { cancelled = true }
+  }, [])
 
   async function handleSend() {
     if (!subject.trim() || !body.trim()) {
@@ -70,15 +74,20 @@ export function MailerClient({ campaigns: initialCampaigns }: { campaigns: Campa
       setCampaigns((prev) => [data.campaign, ...prev])
       setSubject('')
       setBody('')
-      setRecipientCount(null)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Greška pri slanju')
     }
     setSending(false)
   }
 
+  const groups: { key: string; title: string }[] = [
+    { key: 'all', title: 'Svi' },
+    { key: 'plan', title: 'Po paketu' },
+    { key: 'status', title: 'Po statusu' },
+  ]
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Mailer</h1>
         <p className="text-muted-foreground text-sm mt-1">Pošalji email kampanju trenerima</p>
@@ -89,28 +98,44 @@ export function MailerClient({ campaigns: initialCampaigns }: { campaigns: Campa
           <CardTitle className="text-base">Nova kampanja</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <Label>Segment</Label>
-            <Select value={segment} onValueChange={(v) => v != null && loadRecipientCount(v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SEGMENTS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {recipientCount !== null && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="w-4 h-4" />
-                <span>
-                  {loadingCount ? 'Učitavanje...' : `${recipientCount} primatelja`}
-                </span>
+          <div className="space-y-3">
+            <Label>Kome šalješ</Label>
+            {groups.map((g) => (
+              <div key={g.key} className="space-y-1.5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{g.title}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {SEGMENTS.filter((s) => s.group === g.key).map((s) => {
+                    const selected = segment === s.value
+                    const count = counts[s.value]
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => setSegment(s.value)}
+                        className={`relative flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors ${
+                          selected
+                            ? 'border-primary/50 bg-primary/10'
+                            : 'border-border bg-card hover:bg-accent/40'
+                        }`}
+                      >
+                        {selected && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-primary" />}
+                        <span className="text-sm font-medium">{s.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {count == null ? '…' : `${count} ${count === 1 ? 'primatelj' : 'primatelja'}`}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            )}
+            ))}
+            <div className="flex items-center gap-2 text-sm pt-1">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Odabrano:</span>
+              <span className="font-semibold">
+                {recipientCount == null ? '…' : `${recipientCount} primatelja`}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2">

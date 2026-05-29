@@ -3,26 +3,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard, Users, Clock, MessageSquare,
-  Mail, StickyNote, LogOut, BarChart3, Settings, Vault, CalendarDays,
-} from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-
-const internalNavItems = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
-  { href: '/financije', label: 'Financije', icon: BarChart3 },
-  { href: '/treneri', label: 'Treneri', icon: Users },
-  { href: '/expiring', label: 'Expiring Soon', icon: Clock },
-  { href: '/mailer', label: 'Mailer', icon: Mail },
-  { href: '/notes', label: 'Notes', icon: StickyNote },
-  { href: '/sef', label: 'Sef', icon: Vault },
-  { href: '/prezentacije', label: 'Prezentacije', icon: CalendarDays },
-  { href: '/postavke', label: 'Postavke', icon: Settings },
-]
-
-const GMAIL_URL = 'https://mail.google.com/a/unitlift.com/'
+import { primaryNav, toolsNav, settingsNav, isActive, type NavItem } from '@/lib/nav'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -30,6 +14,24 @@ export function Sidebar() {
   async function handleSignOut() {
     await fetch('/api/auth/signout', { method: 'POST' })
     window.location.href = '/login'
+  }
+
+  function NavLink({ href, label, icon: Icon }: NavItem) {
+    const active = isActive(href, pathname)
+    return (
+      <Link
+        href={href}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+          active
+            ? 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+        )}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span className="flex-1">{label}</span>
+      </Link>
+    )
   }
 
   return (
@@ -49,40 +51,16 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {internalNavItems.map(({ href, label, icon: Icon }) => {
-          const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-              )}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{label}</span>
-            </Link>
-          )
-        })}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Poslovanje</p>
+        {primaryNav.map((item) => <NavLink key={item.href} {...item} />)}
 
-        {/* Gmail — external link */}
-        <a
-          href={GMAIL_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-        >
-          <MessageSquare className="w-4 h-4 shrink-0" />
-          <span className="flex-1">Support</span>
-          <span className="text-[9px] text-muted-foreground/60">↗</span>
-        </a>
+        <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Alati</p>
+        {toolsNav.map((item) => <NavLink key={item.href} {...item} />)}
       </nav>
 
-      <div className="px-3 py-4 border-t border-border">
+      <div className="px-3 py-3 border-t border-border space-y-1">
+        {settingsNav.map((item) => <NavLink key={item.href} {...item} />)}
         <Button
           variant="ghost"
           size="sm"

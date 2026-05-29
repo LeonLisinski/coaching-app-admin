@@ -93,7 +93,7 @@ export function DostupnostClient({
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-8">
+    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-8">
       {/* Header */}
       <div>
         <Link href="/prezentacije" className="text-xs text-muted-foreground hover:underline flex items-center gap-1 mb-3">

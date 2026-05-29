@@ -13,6 +13,8 @@ function Progress({
   return (
     <ProgressPrimitive.Root
       value={value}
+      // Explicit aria-valuetext avoids server/client locale mismatch (e.g. "0 %" vs "0%")
+      aria-valuetext={value != null ? `${Math.round(value as number)}%` : undefined}
       data-slot="progress"
       className={cn("flex flex-wrap gap-3", className)}
       {...props}

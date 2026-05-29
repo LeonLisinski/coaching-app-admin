@@ -307,7 +307,7 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
   const initials = t.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       {/* ── Status banner ─────────────────────────────────────────── */}
       {(t.status === 'past_due' || t.status === 'locked' || t.cancel_at_period_end) && (
         <div className={`px-6 py-3 flex items-center gap-2.5 text-sm ${
@@ -385,8 +385,8 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
           />
           <StatTile
             icon={<CalendarDays className="w-4 h-4" />}
-            label="Registracija"
-            value={format(new Date(t.created_at), 'd. M. yy.')}
+            label="Reg."
+            value={format(new Date(t.created_at), 'd.M.yy.')}
           />
         </div>
 
@@ -512,7 +512,7 @@ function StatTile({
   return (
     <div className="bg-muted/30 border border-border rounded-xl p-3 flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5 text-muted-foreground">{icon}<span className="text-[10px] font-medium uppercase tracking-wide">{label}</span></div>
-      <p className={`text-base font-bold leading-tight ${valueClass}`}>{value}</p>
+      <p className={`text-sm font-bold leading-tight break-all ${valueClass}`}>{value}</p>
     </div>
   )
 }

@@ -379,7 +379,12 @@ function DayPanel({ day, items, busy, showForm, fTitle, fDesc, fTime, setFTitle,
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Vrijeme (opcionalno)</Label>
-              <Input type="time" value={fTime} onChange={(e) => setFTime(e.target.value)} />
+              <input
+                type="time"
+                value={fTime}
+                onChange={(e) => setFTime(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:dark]"
+              />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs">Bilješka (opcionalno)</Label>

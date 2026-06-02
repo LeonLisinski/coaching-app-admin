@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, BarChart3, Users, CalendarDays, CalendarCheck,
-  Mail, Vault, StickyNote, Settings, type LucideIcon,
+  Mail, Vault, StickyNote, Settings, BookText, type LucideIcon,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -21,6 +21,7 @@ export const primaryNav: NavItem[] = [
 /** Secondary tools — desktop "Alati" group + mobile "Više" sheet. */
 export const toolsNav: NavItem[] = [
   { href: '/treneri', label: 'Treneri', icon: Users },
+  { href: '/kpp',     label: 'KPP',     icon: BookText },
   { href: '/mailer',  label: 'Mailer',  icon: Mail },
   { href: '/sef',     label: 'Sef',     icon: Vault },
   { href: '/notes',   label: 'Notes',   icon: StickyNote },

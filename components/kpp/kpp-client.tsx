@@ -175,9 +175,11 @@ function EntryModal({
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Iznos (EUR) *</label>
               <input
-                type="number" step="0.01" min="0"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
                 className={inputCls} value={form.iznos}
-                onChange={e => set('iznos', e.target.value)}
+                onChange={e => set('iznos', e.target.value.replace(/[^0-9.]/g, ''))}
               />
             </div>
 
@@ -257,9 +259,23 @@ function DeleteConfirm({ entry, onClose, onDeleted }: { entry: KppEntry; onClose
 
 // ─── Filter bar ───────────────────────────────────────────────────────────────
 
+const YEARS = [2024, 2025, 2026, 2027, 2028]
+
 function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
   const [open, setOpen] = useState(false)
+  const [yearOpen, setYearOpen] = useState(false)
   const [local, setLocal] = useState(filters)
+  const yearRef = useRef<HTMLDivElement>(null)
+
+  // Close year dropdown on outside click
+  useEffect(() => {
+    if (!yearOpen) return
+    const handler = (e: MouseEvent) => {
+      if (yearRef.current && !yearRef.current.contains(e.target as Node)) setYearOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [yearOpen])
 
   const set = (k: keyof Filters, v: string) =>
     setLocal(prev => ({ ...prev, [k]: v }))
@@ -267,25 +283,45 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filt
   const apply = () => { onChange(local); setOpen(false) }
   const reset = () => { setLocal(DEFAULT_FILTERS); onChange(DEFAULT_FILTERS); setOpen(false) }
 
+  const selectYear = (y: number) => {
+    const ys = String(y)
+    const nf = { ...local, year: ys, from: `${ys}-01-01`, to: `${ys}-12-31` }
+    setLocal(nf)
+    onChange(nf)
+    setYearOpen(false)
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Quick year filter */}
-      <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
-        <span className="text-xs text-muted-foreground">Godina:</span>
-        <select
-          className="text-xs font-semibold bg-transparent border-none outline-none cursor-pointer"
-          value={local.year}
-          onChange={e => {
-            const y = e.target.value
-            const nf = { ...local, year: y, from: `${y}-01-01`, to: `${y}-12-31` }
-            setLocal(nf)
-            onChange(nf)
-          }}
+
+      {/* Custom year picker */}
+      <div ref={yearRef} className="relative">
+        <button
+          onClick={() => setYearOpen(o => !o)}
+          className="flex items-center gap-2 bg-muted hover:bg-muted/80 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border border-transparent hover:border-border"
         >
-          {[2024, 2025, 2026, 2027].map(y => (
-            <option key={y} value={String(y)}>{y}</option>
-          ))}
-        </select>
+          <span className="text-muted-foreground font-normal">Godina</span>
+          <span>{local.year}</span>
+          <ChevronDown size={11} className={`text-muted-foreground transition-transform ${yearOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {yearOpen && (
+          <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden min-w-[90px]">
+            {YEARS.map(y => (
+              <button
+                key={y}
+                onClick={() => selectYear(y)}
+                className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                  String(y) === local.year
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'hover:bg-accent text-foreground'
+                }`}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Category filter */}
@@ -294,8 +330,10 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filt
           <button
             key={k}
             onClick={() => { const nf = { ...local, kat: k }; setLocal(nf); onChange(nf) }}
-            className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${
-              local.kat === k ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+              local.kat === k
+                ? 'bg-background shadow text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {k === 'all' ? 'Sve' : k === 'app' ? 'App' : 'Ostalo'}
@@ -306,30 +344,58 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filt
       {/* Advanced filters toggle */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-1.5 transition-colors"
+        className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 transition-colors ${
+          open
+            ? 'border-primary/50 bg-primary/5 text-foreground'
+            : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80'
+        }`}
       >
         <Filter size={12} />
         Filteri
-        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div className="w-full bg-card border border-border rounded-xl p-4 flex flex-wrap gap-4 items-end mt-1">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Od datuma</label>
-            <input type="date" className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background" value={local.from} onChange={e => set('from', e.target.value)} />
+            <input
+              type="date"
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              value={local.from}
+              onChange={e => set('from', e.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Do datuma</label>
-            <input type="date" className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background" value={local.to} onChange={e => set('to', e.target.value)} />
+            <input
+              type="date"
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              value={local.to}
+              onChange={e => set('to', e.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Min iznos (€)</label>
-            <input type="number" min="0" step="0.01" className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background w-24" value={local.min} onChange={e => set('min', e.target.value)} />
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background w-24 focus:outline-none focus:ring-1 focus:ring-ring"
+              value={local.min}
+              onChange={e => set('min', e.target.value.replace(/[^0-9.]/g, ''))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Max iznos (€)</label>
-            <input type="number" min="0" step="0.01" className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background w-24" value={local.max} onChange={e => set('max', e.target.value)} />
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="9999.00"
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background w-24 focus:outline-none focus:ring-1 focus:ring-ring"
+              value={local.max}
+              onChange={e => set('max', e.target.value.replace(/[^0-9.]/g, ''))}
+            />
           </div>
           <div className="flex gap-2 items-end">
             <Button size="sm" onClick={apply} className="gap-1.5 h-8"><Check size={12} /> Primijeni</Button>

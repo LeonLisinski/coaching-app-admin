@@ -164,7 +164,7 @@ function EntryModal({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Datum *</label>
-              <input type="date" className={inputCls} value={form.datum} onChange={e => set('datum', e.target.value)} />
+              <DateInput value={form.datum} onChange={v => set('datum', v)} className={inputCls} />
             </div>
 
             <div className="flex flex-col gap-1.5 col-span-2">
@@ -359,20 +359,18 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filt
         <div className="w-full bg-card border border-border rounded-xl p-4 flex flex-wrap gap-4 items-end mt-1">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Od datuma</label>
-            <input
-              type="date"
-              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            <DateInput
               value={local.from}
-              onChange={e => set('from', e.target.value)}
+              onChange={v => set('from', v)}
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring w-28"
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Do datuma</label>
-            <input
-              type="date"
-              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            <DateInput
               value={local.to}
-              onChange={e => set('to', e.target.value)}
+              onChange={v => set('to', v)}
+              className="text-xs border border-input rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring w-28"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -407,7 +405,43 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Filt
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Smart date input: display dd.mm.yyyy, store yyyy-mm-dd ──────────────────
+function DateInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  // value is always yyyy-mm-dd (or ''); display is dd.mm.yyyy
+  const toDisplay = (iso: string) => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-')
+    return `${d}.${m}.${y}`
+  }
+  const [raw, setRaw] = useState(toDisplay(value))
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.replace(/[^0-9.]/g, '')
+    // Auto-insert dots
+    if (v.length === 2 && !v.includes('.') && raw.length < 3) v += '.'
+    if (v.length === 5 && v.split('.').length === 2 && raw.length < 6) v += '.'
+    setRaw(v)
+    // Parse dd.mm.yyyy → yyyy-mm-dd
+    const parts = v.split('.')
+    if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+      const iso = `${parts[2]}-${parts[1]}-${parts[0]}`
+      if (!isNaN(Date.parse(iso))) onChange(iso)
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="dd.mm.yyyy"
+      value={raw}
+      onChange={handleChange}
+      onBlur={() => setRaw(toDisplay(value))}
+      maxLength={10}
+      className={className}
+    />
+  )
+}
 
 export function KppClient() {
   const [rows, setRows]         = useState<KppEntry[]>([])

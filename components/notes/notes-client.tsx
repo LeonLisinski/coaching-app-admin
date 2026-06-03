@@ -110,6 +110,45 @@ const emptyTaskForm = {
   image_url: '',
 }
 
+// ─── DateInput — must be defined before NotesClient (SSR hoisting issue) ──────
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [display, setDisplay] = useState(() => {
+    if (!value) return ''
+    const [y, m, d] = value.split('-')
+    return `${d}.${m}.${y}`
+  })
+
+  useEffect(() => {
+    if (!value) { setDisplay(''); return }
+    const [y, m, d] = value.split('-')
+    if (y && m && d) setDisplay(`${d}.${m}.${y}`)
+  }, [value])
+
+  function handleChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    let fmt = digits
+    if (digits.length > 4) fmt = digits.slice(0, 2) + '.' + digits.slice(2, 4) + '.' + digits.slice(4)
+    else if (digits.length > 2) fmt = digits.slice(0, 2) + '.' + digits.slice(2)
+    if (raw.endsWith('.') && fmt.length < 6) fmt = fmt + '.'
+    setDisplay(fmt)
+    if (digits.length === 8) {
+      onChange(`${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`)
+    } else {
+      onChange('')
+    }
+  }
+
+  return (
+    <Input
+      value={display}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder="dd.mm.yyyy"
+      maxLength={10}
+      inputMode="numeric"
+    />
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function NotesClient({
   tasks: initialTasks,
@@ -587,54 +626,6 @@ export function NotesClient({
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  // value is yyyy-mm-dd or '', display is dd.mm.yyyy
-  const [display, setDisplay] = useState(() => {
-    if (!value) return ''
-    const [y, m, d] = value.split('-')
-    return `${d}.${m}.${y}`
-  })
-
-  useEffect(() => {
-    if (!value) { setDisplay(''); return }
-    const [y, m, d] = value.split('-')
-    if (y && m && d) setDisplay(`${d}.${m}.${y}`)
-  }, [value])
-
-  function handleChange(raw: string) {
-    const prev = display
-    const digits = raw.replace(/\D/g, '').slice(0, 8)
-    let fmt = digits
-    if (digits.length > 4) fmt = digits.slice(0, 2) + '.' + digits.slice(2, 4) + '.' + digits.slice(4)
-    else if (digits.length > 2) fmt = digits.slice(0, 2) + '.' + digits.slice(2)
-    // allow user to type dots manually — if raw ends with '.' keep it
-    if (raw.endsWith('.') && fmt.length < 6) fmt = fmt + '.'
-    // preserve trailing dot deletion
-    if (raw.length < prev.length && (prev.endsWith('.') || prev.slice(-2, -1) === '.')) {
-      // let normal deletion work
-    }
-    setDisplay(fmt)
-    if (digits.length === 8) {
-      const dd = digits.slice(0, 2)
-      const mm = digits.slice(2, 4)
-      const yyyy = digits.slice(4)
-      onChange(`${yyyy}-${mm}-${dd}`)
-    } else {
-      onChange('')
-    }
-  }
-
-  return (
-    <Input
-      value={display}
-      onChange={(e) => handleChange(e.target.value)}
-      placeholder="dd.mm.yyyy"
-      maxLength={10}
-      inputMode="numeric"
-    />
-  )
-}
 
 function CategoryCard({
   cat, activeCount, onAdd, children, wide,

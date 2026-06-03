@@ -307,7 +307,8 @@ export function NotesClient({
   }
 
   return (
-    <div className="flex flex-col h-dvh p-4 md:p-6 gap-3 w-full overflow-hidden">
+    // Mobile: natural scroll. Desktop: locked to viewport height.
+    <div className="flex flex-col p-4 md:p-6 gap-3 w-full md:h-dvh md:overflow-hidden">
       <div className="flex items-start justify-between gap-4 flex-wrap shrink-0">
         <div>
           <h1 className="text-2xl font-bold">Notes</h1>
@@ -318,7 +319,7 @@ export function NotesClient({
         </Button>
       </div>
 
-      <Tabs defaultValue="zadaci" className="flex flex-col flex-1 min-h-0">
+      <Tabs defaultValue="zadaci" className="flex flex-col md:flex-1 md:min-h-0">
         <div className="flex items-center justify-between gap-3 flex-wrap shrink-0">
           <TabsList>
             <TabsTrigger value="zadaci">Zadaci ({activeTaskCount})</TabsTrigger>
@@ -335,10 +336,11 @@ export function NotesClient({
         </div>
 
         {/* ─── ZADACI ─────────────────────────────────────────────────────────── */}
-        <TabsContent value="zadaci" className="mt-3 flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
-          {/* 2×2 grid — fixed proportional height (does NOT grow with content) */}
+        <TabsContent value="zadaci" className="mt-3 md:flex-1 md:min-h-0 flex flex-col gap-3 md:overflow-hidden">
+          {/* Mobile: single column, cards have fixed height and scroll internally.
+              Desktop: 2×2 grid fills remaining height proportionally. */}
           <div
-            className="grid grid-cols-1 gap-3 md:grid-cols-2 flex-[3_3_0%] min-h-0"
+            className="grid grid-cols-1 gap-3 md:grid-cols-2 md:flex-[3_3_0%] md:min-h-0"
             style={{ gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }}
           >
             {GRID_CATS.map((cat) => {
@@ -382,7 +384,7 @@ export function NotesClient({
                 return b.priority - a.priority
               })
             return (
-              <div className="flex-[1.2_1.2_0%] min-h-0">
+              <div className="md:flex-[1.2_1.2_0%] md:min-h-0">
                 <CategoryCard
                   cat={GENERAL_CAT}
                   activeCount={genTasks.filter((t) => !t.done).length}
@@ -638,7 +640,7 @@ function CategoryCard({
 }) {
   const hasChildren = Array.isArray(children) ? children.filter(Boolean).length > 0 : !!children
   return (
-    <div className={`border rounded-xl flex flex-col h-full min-h-0 ${cat.color} ${wide ? 'col-span-full' : ''}`}>
+    <div className={`border rounded-xl flex flex-col h-52 md:h-full min-h-0 ${cat.color} ${wide ? 'col-span-full' : ''}`}>
       {/* Card header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-inherit shrink-0">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cat.dot}`} />

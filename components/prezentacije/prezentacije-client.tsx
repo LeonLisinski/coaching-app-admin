@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { CalendarDays, Check, X, Clock, ChevronRight } from 'lucide-react'
+import { CalendarDays, Check, X, Clock, ChevronRight, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Booking = {
@@ -56,9 +56,10 @@ function fmtDT(date: string, time: string) {
 export function PrezentacijeClient({ bookings: initial }: { bookings: Booking[] }) {
   const [bookings, setBookings] = useState(initial)
   const [filter,   setFilter]   = useState<string>('all')
-  const [acting,   setActing]   = useState<string | null>(null)
-  const [noteFor,  setNoteFor]  = useState<string | null>(null)
-  const [note,     setNote]     = useState('')
+  const [acting,      setActing]      = useState<string | null>(null)
+  const [noteFor,     setNoteFor]     = useState<string | null>(null)
+  const [note,        setNote]        = useState('')
+  const [confirmDel,  setConfirmDel]  = useState<string | null>(null)
 
   const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status === filter)
 
@@ -67,6 +68,21 @@ export function PrezentacijeClient({ bookings: initial }: { bookings: Booking[] 
     pending:   bookings.filter(b => b.status === 'pending').length,
     confirmed: bookings.filter(b => b.status === 'confirmed').length,
     rejected:  bookings.filter(b => b.status === 'rejected').length,
+  }
+
+  async function deleteBooking(id: string) {
+    setActing(id)
+    try {
+      const res = await fetch(`/api/prezentacije/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setBookings(bs => bs.filter(b => b.id !== id))
+      toast.success('Zahtjev obrisan.')
+    } catch {
+      toast.error('Greška pri brisanju.')
+    } finally {
+      setActing(null)
+      setConfirmDel(null)
+    }
   }
 
   async function act(id: string, action: 'confirm' | 'reject') {
@@ -172,42 +188,79 @@ export function PrezentacijeClient({ bookings: initial }: { bookings: Booking[] 
                 {new Date(b.created_at).toLocaleDateString('hr-HR')} · {b.id.slice(0, 8)}
               </p>
 
-              {b.status === 'pending' && (
+              <div className="flex flex-wrap gap-2 items-center justify-between">
+                {/* Confirm / reject — only for pending */}
                 <div className="flex flex-wrap gap-2 items-start">
-                  {noteFor === b.id && (
-                    <input
-                      className="flex-1 min-w-[160px] text-sm border border-border rounded-md px-3 py-1.5 bg-background"
-                      placeholder="Interna napomena (opcionalno)"
-                      value={note}
-                      onChange={e => setNote(e.target.value)}
-                    />
+                  {b.status === 'pending' && (
+                    <>
+                      {noteFor === b.id && (
+                        <input
+                          className="flex-1 min-w-[160px] text-sm border border-border rounded-md px-3 py-1.5 bg-background"
+                          placeholder="Interna napomena (opcionalno)"
+                          value={note}
+                          onChange={e => setNote(e.target.value)}
+                        />
+                      )}
+                      <Button
+                        variant="outline" size="sm"
+                        onClick={() => { setNoteFor(noteFor === b.id ? null : b.id); setNote('') }}
+                      >
+                        {noteFor === b.id ? 'Odustani' : '+ Napomena'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                        disabled={!!acting}
+                        onClick={() => act(b.id, 'confirm')}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        {acting === b.id ? '...' : 'Potvrdi'}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50 gap-1.5"
+                        disabled={!!acting}
+                        onClick={() => act(b.id, 'reject')}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        {acting === b.id ? '...' : 'Odbij'}
+                      </Button>
+                    </>
                   )}
-                  <Button
-                    variant="outline" size="sm"
-                    onClick={() => { setNoteFor(noteFor === b.id ? null : b.id); setNote('') }}
-                  >
-                    {noteFor === b.id ? 'Odustani' : '+ Napomena'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                    disabled={!!acting}
-                    onClick={() => act(b.id, 'confirm')}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    {acting === b.id ? '...' : 'Potvrdi'}
-                  </Button>
-                  <Button
-                    size="sm" variant="outline"
-                    className="text-red-600 border-red-200 hover:bg-red-50 gap-1.5"
-                    disabled={!!acting}
-                    onClick={() => act(b.id, 'reject')}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    {acting === b.id ? '...' : 'Odbij'}
-                  </Button>
                 </div>
-              )}
+
+                {/* Delete — always visible, with inline confirm */}
+                <div className="flex items-center gap-2 ml-auto">
+                  {confirmDel === b.id ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">Obrisati?</span>
+                      <Button
+                        size="sm" variant="destructive"
+                        disabled={!!acting}
+                        onClick={() => deleteBooking(b.id)}
+                        className="gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {acting === b.id ? '...' : 'Da, obriši'}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => setConfirmDel(null)}
+                      >
+                        Odustani
+                      </Button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDel(b.id)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Obriši zahtjev"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>

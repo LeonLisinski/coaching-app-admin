@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Plus, Pencil, Trash2, Archive, Calendar, Clock, AlertTriangle,
-  ImageIcon, X, Loader2, Check, ChevronDown, ChevronRight, Eye,
+  ImageIcon, X, Loader2, Check, Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,13 +53,17 @@ interface Settings {
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-const CATEGORIES: { key: Category; label: string; sub: string }[] = [
-  { key: 'web_app', label: 'Web app', sub: 'trener' },
-  { key: 'mobile_app', label: 'Mobilna app', sub: 'klijent' },
-  { key: 'web_site', label: 'Web stranica', sub: '' },
-  { key: 'admin_app', label: 'Admin app', sub: '' },
-  { key: 'general', label: 'Općenito', sub: '' },
+const CATEGORIES: { key: Category; label: string; sub: string; color: string; dot: string }[] = [
+  { key: 'web_app',    label: 'Web app',      sub: 'trener',   color: 'border-blue-500/40 bg-blue-500/5',    dot: 'bg-blue-500' },
+  { key: 'mobile_app', label: 'Mobilna app',  sub: 'klijent',  color: 'border-violet-500/40 bg-violet-500/5', dot: 'bg-violet-500' },
+  { key: 'web_site',  label: 'Web stranica',  sub: '',         color: 'border-emerald-500/40 bg-emerald-500/5', dot: 'bg-emerald-500' },
+  { key: 'admin_app', label: 'Admin app',     sub: '',         color: 'border-orange-500/40 bg-orange-500/5', dot: 'bg-orange-500' },
+  { key: 'general',   label: 'Općenito',      sub: '',         color: 'border-zinc-500/40 bg-zinc-500/5',    dot: 'bg-zinc-400' },
 ]
+
+// First 4 = main grid, last = general
+const GRID_CATS = CATEGORIES.slice(0, 4)
+const GENERAL_CAT = CATEGORIES[4]
 
 const NOTE_TAGS = ['Marketing', 'Produkt', 'Tech', 'Ostalo']
 const TAG_COLORS: Record<string, string> = {
@@ -129,6 +133,9 @@ export function NotesClient({
 
   // Task detail dialog
   const [detailTask, setDetailTask] = useState<Task | null>(null)
+
+  // Lightbox
+  const [lightbox, setLightbox] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -254,70 +261,109 @@ export function NotesClient({
     }
   }
 
+  function openNewTaskForCat(cat: Category) {
+    setTaskForm({ ...emptyTaskForm, category: cat })
+    setIsEditTask(false)
+    setTaskDialog(true)
+  }
+
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold">Notes</h1>
-        <p className="text-sm text-muted-foreground mt-1">Zadaci i bilješke za razvoj UnitLifta</p>
+    <div className="flex flex-col h-dvh p-4 md:p-6 gap-3 w-full overflow-hidden">
+      <div className="flex items-start justify-between gap-4 flex-wrap shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold">Notes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Zadaci i bilješke za razvoj UnitLifta</p>
+        </div>
+        <Button size="sm" onClick={openNewTask} className="gap-1.5 shrink-0">
+          <Plus className="w-4 h-4" /> Novi zadatak
+        </Button>
       </div>
 
-      <Tabs defaultValue="zadaci">
-        <TabsList>
-          <TabsTrigger value="zadaci">Zadaci ({activeTaskCount})</TabsTrigger>
-          <TabsTrigger value="ostalo">Ostalo ({notes.filter((n) => !n.archived).length})</TabsTrigger>
-          <TabsTrigger value="postavke">Postavke</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="zadaci" className="flex flex-col flex-1 min-h-0">
+        <div className="flex items-center justify-between gap-3 flex-wrap shrink-0">
+          <TabsList>
+            <TabsTrigger value="zadaci">Zadaci ({activeTaskCount})</TabsTrigger>
+            <TabsTrigger value="ostalo">Ostalo ({notes.filter((n) => !n.archived).length})</TabsTrigger>
+            <TabsTrigger value="postavke">Postavke</TabsTrigger>
+          </TabsList>
+          <button
+            onClick={() => setShowDone((v) => !v)}
+            className="text-xs px-3 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            {showDone ? 'Sakrij završene' : 'Prikaži završene'}
+          </button>
+        </div>
 
         {/* ─── ZADACI ─────────────────────────────────────────────────────────── */}
-        <TabsContent value="zadaci" className="mt-5 space-y-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <Button size="sm" onClick={openNewTask} className="gap-1.5">
-              <Plus className="w-4 h-4" /> Novi zadatak
-            </Button>
-            <button
-              onClick={() => setShowDone((v) => !v)}
-              className="text-xs px-3 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              {showDone ? 'Sakrij završene' : 'Prikaži završene'}
-            </button>
+        <TabsContent value="zadaci" className="mt-3 flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+          {/* 2×2 grid — fixed proportional height (does NOT grow with content) */}
+          <div
+            className="grid grid-cols-1 gap-3 md:grid-cols-2 flex-[3_3_0%] min-h-0"
+            style={{ gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }}
+          >
+            {GRID_CATS.map((cat) => {
+              const catTasks = tasks
+                .filter((t) => t.category === cat.key)
+                .filter((t) => (showDone ? true : !t.done))
+                .sort((a, b) => {
+                  if (a.done !== b.done) return a.done ? 1 : -1
+                  return b.priority - a.priority
+                })
+              const activeCount = catTasks.filter((t) => !t.done).length
+              return (
+                <CategoryCard
+                  key={cat.key}
+                  cat={cat}
+                  activeCount={activeCount}
+                  onAdd={() => openNewTaskForCat(cat.key)}
+                >
+                  {catTasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onToggle={(done) => toggleTaskDone(task, done)}
+                      onOpen={() => setDetailTask(task)}
+                      onEdit={() => openEditTask(task)}
+                      onDelete={() => deleteTask(task.id)}
+                    />
+                  ))}
+                </CategoryCard>
+              )
+            })}
           </div>
 
-          {CATEGORIES.map((cat) => {
-            const catTasks = tasks
-              .filter((t) => t.category === cat.key)
+          {/* Općenito — full-width strip, fixed proportional height */}
+          {(() => {
+            const genTasks = tasks
+              .filter((t) => t.category === GENERAL_CAT.key)
               .filter((t) => (showDone ? true : !t.done))
               .sort((a, b) => {
                 if (a.done !== b.done) return a.done ? 1 : -1
                 return b.priority - a.priority
               })
-            if (catTasks.length === 0) return null
             return (
-              <CategorySection
-                key={cat.key}
-                label={cat.label}
-                sub={cat.sub}
-                count={catTasks.filter((t) => !t.done).length}
-              >
-                {catTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onToggle={(done) => toggleTaskDone(task, done)}
-                    onOpen={() => setDetailTask(task)}
-                    onEdit={() => openEditTask(task)}
-                    onDelete={() => deleteTask(task.id)}
-                  />
-                ))}
-              </CategorySection>
+              <div className="flex-[1.2_1.2_0%] min-h-0">
+                <CategoryCard
+                  cat={GENERAL_CAT}
+                  activeCount={genTasks.filter((t) => !t.done).length}
+                  onAdd={() => openNewTaskForCat(GENERAL_CAT.key)}
+                  wide
+                >
+                  {genTasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onToggle={(done) => toggleTaskDone(task, done)}
+                      onOpen={() => setDetailTask(task)}
+                      onEdit={() => openEditTask(task)}
+                      onDelete={() => deleteTask(task.id)}
+                    />
+                  ))}
+                </CategoryCard>
+              </div>
             )
-          })}
-
-          {tasks.filter((t) => (showDone ? true : !t.done)).length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg">
-              <p className="text-muted-foreground text-sm">Nema zadataka. Dodaj prvi!</p>
-            </div>
-          )}
+          })()}
         </TabsContent>
 
         {/* ─── OSTALO ─────────────────────────────────────────────────────────── */}
@@ -377,10 +423,9 @@ export function NotesClient({
               </div>
               <div className="space-y-1.5">
                 <Label>Rok (opcionalno)</Label>
-                <Input
-                  type="date"
+                <DateInput
                   value={taskForm.due_date}
-                  onChange={(e) => setTaskForm((f) => ({ ...f, due_date: e.target.value }))}
+                  onChange={(v) => setTaskForm((f) => ({ ...f, due_date: v }))}
                 />
               </div>
             </div>
@@ -406,7 +451,7 @@ export function NotesClient({
 
             {/* Image */}
             <div className="space-y-1.5">
-              <Label>Slika (zalijepi sa Ctrl+V ili odaberi)</Label>
+              <Label>Slika</Label>
               {taskForm.image_url ? (
                 <div className="relative group rounded-lg overflow-hidden border border-border">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -419,19 +464,26 @@ export function NotesClient({
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border border-dashed border-border rounded-lg py-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                >
+                <div className="w-full border border-dashed border-border rounded-lg py-6 flex flex-col items-center justify-center gap-2 text-muted-foreground">
                   {uploading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
                       <ImageIcon className="w-5 h-5" />
-                      <span className="text-xs">Ctrl+V za zalijepiti screenshot, ili klikni za odabir</span>
+                      <span className="text-xs text-center">
+                        Kopiraj sliku i pritisni{' '}
+                        <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[11px]">Ctrl+V</kbd>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors mt-0.5"
+                      >
+                        ili odaberi datoteku
+                      </button>
                     </>
                   )}
-                </button>
+                </div>
               )}
               <input
                 ref={fileInputRef}
@@ -477,8 +529,14 @@ export function NotesClient({
                 )}
 
                 {detailTask.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={detailTask.image_url} alt="Prilog" className="w-full rounded-lg border border-border bg-black/20" />
+                  <button
+                    onClick={() => setLightbox(detailTask.image_url!)}
+                    className="block w-full rounded-lg overflow-hidden border border-border bg-black/20 hover:opacity-90 transition-opacity"
+                    title="Klikni za povećanje"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={detailTask.image_url} alt="Prilog" className="w-full object-contain max-h-64" />
+                  </button>
                 )}
 
                 <div className="flex gap-2 pt-1">
@@ -502,28 +560,121 @@ export function NotesClient({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Lightbox ──────────────────────────────────────────────────────────── */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Povećana slika"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function CategorySection({ label, sub, count, children }: {
-  label: string; sub: string; count: number; children: React.ReactNode
-}) {
-  const [open, setOpen] = useState(true)
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  // value is yyyy-mm-dd or '', display is dd.mm.yyyy
+  const [display, setDisplay] = useState(() => {
+    if (!value) return ''
+    const [y, m, d] = value.split('-')
+    return `${d}.${m}.${y}`
+  })
+
+  useEffect(() => {
+    if (!value) { setDisplay(''); return }
+    const [y, m, d] = value.split('-')
+    if (y && m && d) setDisplay(`${d}.${m}.${y}`)
+  }, [value])
+
+  function handleChange(raw: string) {
+    const prev = display
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    let fmt = digits
+    if (digits.length > 4) fmt = digits.slice(0, 2) + '.' + digits.slice(2, 4) + '.' + digits.slice(4)
+    else if (digits.length > 2) fmt = digits.slice(0, 2) + '.' + digits.slice(2)
+    // allow user to type dots manually — if raw ends with '.' keep it
+    if (raw.endsWith('.') && fmt.length < 6) fmt = fmt + '.'
+    // preserve trailing dot deletion
+    if (raw.length < prev.length && (prev.endsWith('.') || prev.slice(-2, -1) === '.')) {
+      // let normal deletion work
+    }
+    setDisplay(fmt)
+    if (digits.length === 8) {
+      const dd = digits.slice(0, 2)
+      const mm = digits.slice(2, 4)
+      const yyyy = digits.slice(4)
+      onChange(`${yyyy}-${mm}-${dd}`)
+    } else {
+      onChange('')
+    }
+  }
+
   return (
-    <div className="border border-border rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+    <Input
+      value={display}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder="dd.mm.yyyy"
+      maxLength={10}
+      inputMode="numeric"
+    />
+  )
+}
+
+function CategoryCard({
+  cat, activeCount, onAdd, children, wide,
+}: {
+  cat: { key: string; label: string; sub: string; color: string; dot: string }
+  activeCount: number
+  onAdd: () => void
+  children: React.ReactNode
+  wide?: boolean
+}) {
+  const hasChildren = Array.isArray(children) ? children.filter(Boolean).length > 0 : !!children
+  return (
+    <div className={`border rounded-xl flex flex-col h-full min-h-0 ${cat.color} ${wide ? 'col-span-full' : ''}`}>
+      {/* Card header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-inherit shrink-0">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cat.dot}`} />
+        <span className="font-semibold text-sm">{cat.label}</span>
+        {cat.sub && <span className="text-xs text-muted-foreground">({cat.sub})</span>}
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background/60 border border-border/60 text-muted-foreground tabular-nums">
+          {activeCount}
+        </span>
+        <button
+          onClick={onAdd}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/20 transition-colors"
+          title="Dodaj zadatak"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {/* Tasks — scrollable, slim custom scrollbar */}
+      <div
+        className="overflow-y-auto flex-1 divide-y divide-border/40 min-h-0"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}
       >
-        {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-        <span className="font-semibold text-sm">{label}</span>
-        {sub && <span className="text-xs text-muted-foreground">({sub})</span>}
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background border border-border text-muted-foreground">{count}</span>
-      </button>
-      {open && <div className="divide-y divide-border">{children}</div>}
+        {hasChildren
+          ? children
+          : (
+            <p className="text-center text-xs text-muted-foreground py-6">Nema zadataka</p>
+          )}
+      </div>
     </div>
   )
 }

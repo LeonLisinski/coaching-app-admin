@@ -6,10 +6,19 @@ import { NotesClient } from '@/components/notes/notes-client'
 export default async function NotesPage() {
   const supabase = createAdminClient()
 
-  const [{ data: notes }, { data: tasks }] = await Promise.all([
+  const [{ data: tasks }, { data: notes }, { data: settings }] = await Promise.all([
+    supabase.from('admin_tasks').select('*')
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: false }),
     supabase.from('admin_notes').select('*').order('created_at', { ascending: false }),
-    supabase.from('admin_tasks').select('*').order('created_at', { ascending: false }),
+    supabase.from('admin_task_settings').select('*').eq('id', true).single(),
   ])
 
-  return <NotesClient notes={notes ?? []} tasks={tasks ?? []} />
+  return (
+    <NotesClient
+      tasks={tasks ?? []}
+      notes={notes ?? []}
+      settings={settings ?? null}
+    />
+  )
 }

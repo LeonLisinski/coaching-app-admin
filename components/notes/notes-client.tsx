@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Archive, Pencil, Trash2, Check } from 'lucide-react'
+import { useState, useRef } from 'react'
+import {
+  Plus, Pencil, Trash2, Archive, Calendar, Clock, AlertTriangle,
+  ImageIcon, X, Loader2, Check, ChevronDown, ChevronRight, Eye,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,35 +15,53 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase'
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+type Category = 'web_app' | 'mobile_app' | 'web_site' | 'admin_app' | 'general'
+
+interface Task {
+  id: string
+  title: string
+  description: string | null
+  category: Category
+  priority: number
+  due_date: string | null
+  image_url: string | null
+  done: boolean
+  done_at: string | null
+  created_at: string
+}
 
 interface Note {
   id: string
   title: string
-  description: string
+  description: string | null
   tag: string
   archived: boolean
   created_at: string
 }
 
-interface Task {
-  id: string
-  text: string
-  priority: 'visok' | 'srednji' | 'nizak'
-  done: boolean
-  created_at: string
+interface Settings {
+  id: boolean
+  overdue_enabled: boolean
+  overdue_days: number
+  reminder_emails: string[]
+  digest_enabled: boolean
+  digest_priority_min: number
+  digest_emails: string[]
+  hide_done_after_days: number
 }
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+const CATEGORIES: { key: Category; label: string; sub: string }[] = [
+  { key: 'web_app', label: 'Web app', sub: 'trener' },
+  { key: 'mobile_app', label: 'Mobilna app', sub: 'klijent' },
+  { key: 'web_site', label: 'Web stranica', sub: '' },
+  { key: 'admin_app', label: 'Admin app', sub: '' },
+  { key: 'general', label: 'Općenito', sub: '' },
+]
 
 const NOTE_TAGS = ['Marketing', 'Produkt', 'Tech', 'Ostalo']
-
-const PRIORITY_ORDER: Record<string, number> = { visok: 0, srednji: 1, nizak: 2 }
-
-const PRIORITY_COLORS: Record<string, string> = {
-  visok: 'bg-red-500/20 text-red-300 border-red-500/30',
-  srednji: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-  nizak: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
-}
-
 const TAG_COLORS: Record<string, string> = {
   Marketing: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
   Produkt: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
@@ -48,310 +69,794 @@ const TAG_COLORS: Record<string, string> = {
   Ostalo: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
 }
 
-export function NotesClient({ notes: initialNotes, tasks: initialTasks }: { notes: Note[]; tasks: Task[] }) {
-  const [notes, setNotes] = useState(initialNotes)
-  const [tasks, setTasks] = useState(initialTasks)
-  const [taskFilter, setTaskFilter] = useState<'sve' | 'aktivni' | 'dovrseni'>('sve')
-  const [noteDialog, setNoteDialog] = useState(false)
-  const [editNote, setEditNote] = useState<Note | null>(null)
-  const [noteForm, setNoteForm] = useState({ title: '', description: '', tag: 'Ostalo' })
-  const [savingNote, setSavingNote] = useState(false)
-  const [newTaskText, setNewTaskText] = useState('')
-  const [newTaskPriority, setNewTaskPriority] = useState<Task['priority']>('srednji')
+// Priority 0-10 → color
+function priorityStyle(p: number): { bar: string; badge: string; label: string } {
+  if (p >= 9) return { bar: 'bg-red-500', badge: 'bg-red-500/20 text-red-300 border-red-500/40', label: 'Kritično' }
+  if (p >= 7) return { bar: 'bg-orange-500', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40', label: 'Visok' }
+  if (p >= 4) return { bar: 'bg-yellow-500', badge: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40', label: 'Srednji' }
+  return { bar: 'bg-emerald-500', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', label: 'Nizak' }
+}
+
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function fmtDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-')
+  return `${d}.${m}.${y}.`
+}
+
+function dueInfo(due: string | null): { overdue: boolean; today: boolean; days: number } | null {
+  if (!due) return null
+  const t = todayStr()
+  const a = new Date(due + 'T00:00:00').getTime()
+  const b = new Date(t + 'T00:00:00').getTime()
+  const days = Math.round((a - b) / 86400000)
+  return { overdue: days < 0, today: days === 0, days }
+}
+
+const emptyTaskForm = {
+  id: '',
+  title: '',
+  description: '',
+  category: 'web_app' as Category,
+  priority: 5,
+  due_date: '',
+  image_url: '',
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export function NotesClient({
+  tasks: initialTasks,
+  notes: initialNotes,
+  settings: initialSettings,
+}: {
+  tasks: Task[]
+  notes: Note[]
+  settings: Settings | null
+}) {
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [notes, setNotes] = useState<Note[]>(initialNotes)
+  const [showDone, setShowDone] = useState(false)
+
+  // Task editor dialog
+  const [taskDialog, setTaskDialog] = useState(false)
+  const [taskForm, setTaskForm] = useState(emptyTaskForm)
+  const [isEditTask, setIsEditTask] = useState(false)
   const [savingTask, setSavingTask] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
-  const supabase = createClient()
+  // Task detail dialog
+  const [detailTask, setDetailTask] = useState<Task | null>(null)
 
-  const visibleNotes = notes.filter((n) => !n.archived)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const filteredTasks = tasks
-    .filter((t) => {
-      if (taskFilter === 'aktivni') return !t.done
-      if (taskFilter === 'dovrseni') return t.done
-      return true
+  const activeTaskCount = tasks.filter((t) => !t.done).length
+
+  // ── Task helpers ────────────────────────────────────────────────────────────
+  function openNewTask() {
+    setTaskForm(emptyTaskForm)
+    setIsEditTask(false)
+    setTaskDialog(true)
+  }
+
+  function openEditTask(task: Task) {
+    setTaskForm({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? '',
+      category: task.category,
+      priority: task.priority,
+      due_date: task.due_date ?? '',
+      image_url: task.image_url ?? '',
     })
-    .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
-
-  function openNewNote() {
-    setEditNote(null)
-    setNoteForm({ title: '', description: '', tag: 'Ostalo' })
-    setNoteDialog(true)
+    setIsEditTask(true)
+    setDetailTask(null)
+    setTaskDialog(true)
   }
 
-  function openEditNote(note: Note) {
-    setEditNote(note)
-    setNoteForm({ title: note.title, description: note.description, tag: note.tag })
-    setNoteDialog(true)
-  }
-
-  async function saveNote() {
-    if (!noteForm.title.trim()) return
-    setSavingNote(true)
-
-    if (editNote) {
-      const { error } = await supabase
-        .from('admin_notes')
-        .update({ title: noteForm.title, description: noteForm.description, tag: noteForm.tag })
-        .eq('id', editNote.id)
-
-      if (error) {
-        toast.error('Greška')
-      } else {
-        setNotes((prev) => prev.map((n) => n.id === editNote.id ? { ...n, ...noteForm } : n))
-        toast.success('Bilješka ažurirana')
-        setNoteDialog(false)
+  async function uploadImage(file: File) {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/notes/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Greška kod uploada')
+        return
       }
-    } else {
-      const { data, error } = await supabase
-        .from('admin_notes')
-        .insert({ ...noteForm, archived: false })
-        .select()
-        .single()
-
-    if (error) {
-      toast.error(`Greška: ${error.message}`)
-    } else {
-      setNotes((prev) => [data, ...prev])
-      toast.success('Bilješka dodana')
-      setNoteDialog(false)
-    }
-    }
-    setSavingNote(false)
-  }
-
-  async function archiveNote(id: string) {
-    const { error } = await supabase.from('admin_notes').update({ archived: true }).eq('id', id)
-    if (error) {
-      toast.error('Greška')
-    } else {
-      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, archived: true } : n))
-      toast.success('Arhivirano')
+      setTaskForm((f) => ({ ...f, image_url: data.url }))
+      toast.success('Slika dodana')
+    } catch {
+      toast.error('Greška kod uploada')
+    } finally {
+      setUploading(false)
     }
   }
 
-  async function deleteNote(id: string) {
-    const { error } = await supabase.from('admin_notes').delete().eq('id', id)
-    if (error) {
-      toast.error('Greška')
-    } else {
-      setNotes((prev) => prev.filter((n) => n.id !== id))
-      toast.success('Obrisano')
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) {
+          e.preventDefault()
+          uploadImage(file)
+        }
+        break
+      }
     }
   }
 
-  async function addTask() {
-    if (!newTaskText.trim()) return
+  async function saveTask() {
+    if (!taskForm.title.trim()) return
     setSavingTask(true)
-
-    const { data, error } = await supabase
-      .from('admin_tasks')
-      .insert({ text: newTaskText.trim(), priority: newTaskPriority, done: false })
-      .select()
-      .single()
-
-    if (error) {
-      toast.error('Greška')
-    } else {
-      setTasks((prev) => [data, ...prev])
-      setNewTaskText('')
-      setNewTaskPriority('srednji')
+    const payload = {
+      title: taskForm.title,
+      description: taskForm.description,
+      category: taskForm.category,
+      priority: taskForm.priority,
+      due_date: taskForm.due_date || null,
+      image_url: taskForm.image_url || null,
     }
-    setSavingTask(false)
+    try {
+      if (isEditTask) {
+        const res = await fetch(`/api/notes/tasks/${taskForm.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) { toast.error(data.error || 'Greška'); return }
+        setTasks((prev) => prev.map((t) => (t.id === taskForm.id ? data.data : t)))
+        toast.success('Zadatak ažuriran')
+      } else {
+        const res = await fetch('/api/notes/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) { toast.error(data.error || 'Greška'); return }
+        setTasks((prev) => [data.data, ...prev])
+        toast.success('Zadatak dodan')
+      }
+      setTaskDialog(false)
+    } finally {
+      setSavingTask(false)
+    }
   }
 
-  async function toggleTask(id: string, done: boolean) {
-    const { error } = await supabase.from('admin_tasks').update({ done }).eq('id', id)
-    if (!error) {
-      setTasks((prev) => prev.map((t) => t.id === id ? { ...t, done } : t))
+  async function toggleTaskDone(task: Task, done: boolean) {
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, done, done_at: done ? new Date().toISOString() : null } : t)))
+    const res = await fetch(`/api/notes/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ done }),
+    })
+    if (!res.ok) {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, done: !done } : t)))
+      toast.error('Greška')
     }
   }
 
   async function deleteTask(id: string) {
-    const { error } = await supabase.from('admin_tasks').delete().eq('id', id)
-    if (!error) {
+    const res = await fetch(`/api/notes/tasks/${id}`, { method: 'DELETE' })
+    if (res.ok) {
       setTasks((prev) => prev.filter((t) => t.id !== id))
+      setDetailTask(null)
+      toast.success('Obrisano')
+    } else {
+      toast.error('Greška')
     }
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <h1 className="text-2xl font-bold">Notes</h1>
+    <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-bold">Notes</h1>
+        <p className="text-sm text-muted-foreground mt-1">Zadaci i bilješke za razvoj UnitLifta</p>
+      </div>
 
-      <Tabs defaultValue="ideje">
+      <Tabs defaultValue="zadaci">
         <TabsList>
-          <TabsTrigger value="ideje">Ideje ({visibleNotes.length})</TabsTrigger>
-          <TabsTrigger value="zadaci">Zadaci ({tasks.filter((t) => !t.done).length})</TabsTrigger>
+          <TabsTrigger value="zadaci">Zadaci ({activeTaskCount})</TabsTrigger>
+          <TabsTrigger value="ostalo">Ostalo ({notes.filter((n) => !n.archived).length})</TabsTrigger>
+          <TabsTrigger value="postavke">Postavke</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="ideje" className="mt-5 space-y-4">
-          <Button size="sm" onClick={openNewNote} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Nova ideja
-          </Button>
+        {/* ─── ZADACI ─────────────────────────────────────────────────────────── */}
+        <TabsContent value="zadaci" className="mt-5 space-y-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <Button size="sm" onClick={openNewTask} className="gap-1.5">
+              <Plus className="w-4 h-4" /> Novi zadatak
+            </Button>
+            <button
+              onClick={() => setShowDone((v) => !v)}
+              className="text-xs px-3 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              {showDone ? 'Sakrij završene' : 'Prikaži završene'}
+            </button>
+          </div>
 
-          {visibleNotes.length === 0 ? (
+          {CATEGORIES.map((cat) => {
+            const catTasks = tasks
+              .filter((t) => t.category === cat.key)
+              .filter((t) => (showDone ? true : !t.done))
+              .sort((a, b) => {
+                if (a.done !== b.done) return a.done ? 1 : -1
+                return b.priority - a.priority
+              })
+            if (catTasks.length === 0) return null
+            return (
+              <CategorySection
+                key={cat.key}
+                label={cat.label}
+                sub={cat.sub}
+                count={catTasks.filter((t) => !t.done).length}
+              >
+                {catTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onToggle={(done) => toggleTaskDone(task, done)}
+                    onOpen={() => setDetailTask(task)}
+                    onEdit={() => openEditTask(task)}
+                    onDelete={() => deleteTask(task.id)}
+                  />
+                ))}
+              </CategorySection>
+            )
+          })}
+
+          {tasks.filter((t) => (showDone ? true : !t.done)).length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg">
-              <p className="text-muted-foreground text-sm">Nema aktivnih ideja. Dodaj prvu!</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {visibleNotes.map((note) => (
-                <Card key={note.id} className="group relative">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${TAG_COLORS[note.tag] ?? TAG_COLORS.Ostalo}`}>
-                        {note.tag}
-                      </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEditNote(note)}
-                          className="p-1 hover:text-foreground text-muted-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => archiveNote(note.id)}
-                          className="p-1 hover:text-foreground text-muted-foreground transition-colors"
-                          title="Arhiviraj"
-                        >
-                          <Archive className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteNote(note.id)}
-                          className="p-1 hover:text-red-400 text-muted-foreground transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <p className="font-semibold text-sm mt-2">{note.title}</p>
-                  </CardHeader>
-                  {note.description && (
-                    <CardContent className="pt-0">
-                      <p className="text-muted-foreground text-xs leading-relaxed">{note.description}</p>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
+              <p className="text-muted-foreground text-sm">Nema zadataka. Dodaj prvi!</p>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="zadaci" className="mt-5 space-y-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Novi zadatak..."
-              value={newTaskText}
-              onChange={(e) => setNewTaskText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addTask()}
-              className="flex-1"
-            />
-            <Select value={newTaskPriority} onValueChange={(v) => v != null && setNewTaskPriority(v as Task['priority'])}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="visok">Visok</SelectItem>
-                <SelectItem value="srednji">Srednji</SelectItem>
-                <SelectItem value="nizak">Nizak</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={addTask} disabled={savingTask || !newTaskText.trim()} size="sm">
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
+        {/* ─── OSTALO ─────────────────────────────────────────────────────────── */}
+        <TabsContent value="ostalo" className="mt-5">
+          <NotesTab notes={notes} setNotes={setNotes} />
+        </TabsContent>
 
-          <div className="flex gap-2">
-            {(['sve', 'aktivni', 'dovrseni'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setTaskFilter(f)}
-                className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                  taskFilter === f
-                    ? 'bg-accent border-accent-foreground/20 text-foreground'
-                    : 'border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
+        {/* ─── POSTAVKE ───────────────────────────────────────────────────────── */}
+        <TabsContent value="postavke" className="mt-5">
+          <SettingsTab initial={initialSettings} />
+        </TabsContent>
+      </Tabs>
 
-          {filteredTasks.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm border border-dashed border-border rounded-lg">
-              Nema zadataka
+      {/* ─── Task editor dialog ─────────────────────────────────────────────── */}
+      <Dialog open={taskDialog} onOpenChange={setTaskDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isEditTask ? 'Uredi zadatak' : 'Novi zadatak'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2" onPaste={handlePaste}>
+            <div className="space-y-1.5">
+              <Label>Naslov *</Label>
+              <Input
+                value={taskForm.title}
+                onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Kratki naziv zadatka..."
+                autoFocus
+              />
             </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border border-border transition-opacity ${task.done ? 'opacity-50' : ''}`}
+
+            <div className="space-y-1.5">
+              <Label>Opis</Label>
+              <Textarea
+                value={taskForm.description}
+                onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Detaljan opis (opcionalno)..."
+                className="min-h-[90px]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Kategorija</Label>
+                <Select
+                  value={taskForm.category}
+                  onValueChange={(v) => v != null && setTaskForm((f) => ({ ...f, category: v as Category }))}
                 >
-                  <Checkbox
-                    checked={task.done}
-                    onCheckedChange={(checked) => toggleTask(task.id, !!checked)}
-                  />
-                  <span className={`flex-1 text-sm ${task.done ? 'line-through text-muted-foreground' : ''}`}>
-                    {task.text}
-                  </span>
-                  <span className={`text-xs px-2 py-0.5 rounded border font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                    {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                  </span>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>
+                        {c.label}{c.sub ? ` (${c.sub})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Rok (opcionalno)</Label>
+                <Input
+                  type="date"
+                  value={taskForm.due_date}
+                  onChange={(e) => setTaskForm((f) => ({ ...f, due_date: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Priority slider */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Prioritet</Label>
+                <span className={`text-xs px-2 py-0.5 rounded border font-semibold ${priorityStyle(taskForm.priority).badge}`}>
+                  {taskForm.priority}/10 · {priorityStyle(taskForm.priority).label}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={1}
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm((f) => ({ ...f, priority: Number(e.target.value) }))}
+                className="w-full accent-primary"
+              />
+            </div>
+
+            {/* Image */}
+            <div className="space-y-1.5">
+              <Label>Slika (zalijepi sa Ctrl+V ili odaberi)</Label>
+              {taskForm.image_url ? (
+                <div className="relative group rounded-lg overflow-hidden border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={taskForm.image_url} alt="Prilog" className="w-full max-h-52 object-contain bg-black/20" />
                   <button
-                    onClick={() => deleteTask(task.id)}
-                    className="text-muted-foreground hover:text-red-400 transition-colors"
+                    onClick={() => setTaskForm((f) => ({ ...f, image_url: '' }))}
+                    className="absolute top-2 right-2 p-1.5 rounded-md bg-black/60 text-white hover:bg-black/80 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-              ))}
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border border-dashed border-border rounded-lg py-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                >
+                  {uploading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <ImageIcon className="w-5 h-5" />
+                      <span className="text-xs">Ctrl+V za zalijepiti screenshot, ili klikni za odabir</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) uploadImage(file)
+                  e.target.value = ''
+                }}
+              />
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
 
-      <Dialog open={noteDialog} onOpenChange={setNoteDialog}>
-        <DialogContent className="max-w-md">
+            <Button onClick={saveTask} disabled={savingTask || uploading || !taskForm.title.trim()} className="w-full">
+              {savingTask ? 'Snima...' : isEditTask ? 'Spremi izmjene' : 'Dodaj zadatak'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Task detail dialog ─────────────────────────────────────────────── */}
+      <Dialog open={!!detailTask} onOpenChange={(o) => !o && setDetailTask(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
+          {detailTask && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="pr-8">{detailTask.title}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs px-2 py-0.5 rounded border font-semibold ${priorityStyle(detailTask.priority).badge}`}>
+                    P{detailTask.priority}/10 · {priorityStyle(detailTask.priority).label}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground">
+                    {CATEGORIES.find((c) => c.key === detailTask.category)?.label}
+                  </span>
+                  {detailTask.due_date && <DueBadge due={detailTask.due_date} />}
+                </div>
+
+                {detailTask.description && (
+                  <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{detailTask.description}</p>
+                )}
+
+                {detailTask.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={detailTask.image_url} alt="Prilog" className="w-full rounded-lg border border-border bg-black/20" />
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" onClick={() => openEditTask(detailTask)} className="gap-1.5">
+                    <Pencil className="w-3.5 h-3.5" /> Uredi
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleTaskDone(detailTask, !detailTask.done).then(() => setDetailTask(null))}
+                    className="gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" /> {detailTask.done ? 'Vrati u aktivne' : 'Označi gotovim'}
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => deleteTask(detailTask.id)} className="gap-1.5 ml-auto">
+                    <Trash2 className="w-3.5 h-3.5" /> Obriši
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function CategorySection({ label, sub, count, children }: {
+  label: string; sub: string; count: number; children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+      >
+        {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+        <span className="font-semibold text-sm">{label}</span>
+        {sub && <span className="text-xs text-muted-foreground">({sub})</span>}
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background border border-border text-muted-foreground">{count}</span>
+      </button>
+      {open && <div className="divide-y divide-border">{children}</div>}
+    </div>
+  )
+}
+
+function DueBadge({ due }: { due: string }) {
+  const info = dueInfo(due)
+  if (!info) return null
+  let cls = 'border-border text-muted-foreground'
+  let txt = fmtDate(due)
+  if (info.overdue) { cls = 'bg-red-500/20 text-red-300 border-red-500/40'; txt = `Rok prošao (${Math.abs(info.days)}d)` }
+  else if (info.today) { cls = 'bg-orange-500/20 text-orange-300 border-orange-500/40'; txt = 'Rok danas' }
+  else if (info.days <= 3) { cls = 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'; txt = `Za ${info.days}d · ${fmtDate(due)}` }
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded border inline-flex items-center gap-1 ${cls}`}>
+      {info.overdue ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+      {txt}
+    </span>
+  )
+}
+
+function TaskRow({ task, onToggle, onOpen, onEdit, onDelete }: {
+  task: Task
+  onToggle: (done: boolean) => void
+  onOpen: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const ps = priorityStyle(task.priority)
+  return (
+    <div className={`group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors ${task.done ? 'opacity-50' : ''}`}>
+      <div className={`w-1 self-stretch rounded-full ${ps.bar} shrink-0`} />
+      <Checkbox checked={task.done} onCheckedChange={(c) => onToggle(!!c)} />
+      <button onClick={onOpen} className="flex-1 min-w-0 text-left">
+        <span className={`text-sm ${task.done ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <span className={`text-[10px] px-1.5 py-0 rounded border font-semibold ${ps.badge}`}>P{task.priority}</span>
+          {task.due_date && <DueBadge due={task.due_date} />}
+          {task.image_url && <ImageIcon className="w-3 h-3 text-muted-foreground" />}
+        </div>
+      </button>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={onEdit} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-red-400 transition-colors">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Ostalo (notes) tab ───────────────────────────────────────────────────────
+function NotesTab({ notes, setNotes }: { notes: Note[]; setNotes: React.Dispatch<React.SetStateAction<Note[]>> }) {
+  const [dialog, setDialog] = useState(false)
+  const [editNote, setEditNote] = useState<Note | null>(null)
+  const [form, setForm] = useState({ title: '', description: '', tag: 'Ostalo' })
+  const [saving, setSaving] = useState(false)
+
+  const visible = notes.filter((n) => !n.archived)
+
+  function openNew() {
+    setEditNote(null)
+    setForm({ title: '', description: '', tag: 'Ostalo' })
+    setDialog(true)
+  }
+  function openEdit(n: Note) {
+    setEditNote(n)
+    setForm({ title: n.title, description: n.description ?? '', tag: n.tag })
+    setDialog(true)
+  }
+
+  async function save() {
+    if (!form.title.trim()) return
+    setSaving(true)
+    try {
+      if (editNote) {
+        const res = await fetch(`/api/notes/items/${editNote.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        })
+        const data = await res.json()
+        if (!res.ok) { toast.error(data.error || 'Greška'); return }
+        setNotes((prev) => prev.map((n) => (n.id === editNote.id ? data.data : n)))
+        toast.success('Ažurirano')
+      } else {
+        const res = await fetch('/api/notes/items', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        })
+        const data = await res.json()
+        if (!res.ok) { toast.error(data.error || 'Greška'); return }
+        setNotes((prev) => [data.data, ...prev])
+        toast.success('Dodano')
+      }
+      setDialog(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function archive(id: string) {
+    const res = await fetch(`/api/notes/items/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: true }),
+    })
+    if (res.ok) { setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, archived: true } : n))); toast.success('Arhivirano') }
+    else toast.error('Greška')
+  }
+
+  async function remove(id: string) {
+    const res = await fetch(`/api/notes/items/${id}`, { method: 'DELETE' })
+    if (res.ok) { setNotes((prev) => prev.filter((n) => n.id !== id)); toast.success('Obrisano') }
+    else toast.error('Greška')
+  }
+
+  return (
+    <div className="space-y-4">
+      <Button size="sm" onClick={openNew} className="gap-1.5">
+        <Plus className="w-4 h-4" /> Nova bilješka
+      </Button>
+
+      {visible.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg">
+          <p className="text-muted-foreground text-sm">Nema bilješki. Dodaj prvu!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {visible.map((note) => (
+            <Card key={note.id} className="group relative">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded border font-medium ${TAG_COLORS[note.tag] ?? TAG_COLORS.Ostalo}`}>{note.tag}</span>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openEdit(note)} className="p-1 text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => archive(note.id)} className="p-1 text-muted-foreground hover:text-foreground" title="Arhiviraj"><Archive className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => remove(note.id)} className="p-1 text-muted-foreground hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+                <p className="font-semibold text-sm mt-2">{note.title}</p>
+              </CardHeader>
+              {note.description && (
+                <CardContent className="pt-0">
+                  <p className="text-muted-foreground text-xs leading-relaxed whitespace-pre-wrap">{note.description}</p>
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={dialog} onOpenChange={setDialog}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editNote ? 'Uredi bilješku' : 'Nova ideja'}</DialogTitle>
+            <DialogTitle>{editNote ? 'Uredi bilješku' : 'Nova bilješka'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Naslov</Label>
-              <Input
-                value={noteForm.title}
-                onChange={(e) => setNoteForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Naslov ideje..."
-                autoFocus
-              />
+              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Naslov..." autoFocus />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Opis</Label>
-              <Textarea
-                value={noteForm.description}
-                onChange={(e) => setNoteForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Detalji..."
-                className="min-h-[100px]"
-              />
+              <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Detalji..." className="min-h-[100px]" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Tag</Label>
-              <Select value={noteForm.tag} onValueChange={(v) => v != null && setNoteForm((f) => ({ ...f, tag: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.tag} onValueChange={(v) => v != null && setForm((f) => ({ ...f, tag: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {NOTE_TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={saveNote} disabled={savingNote || !noteForm.title.trim()} className="w-full">
-              {savingNote ? 'Snima...' : editNote ? 'Spremi izmjene' : 'Dodaj ideju'}
+            <Button onClick={save} disabled={saving || !form.title.trim()} className="w-full">
+              {saving ? 'Snima...' : editNote ? 'Spremi izmjene' : 'Dodaj'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ─── Postavke (settings) tab ────────────────────────────────────────────────
+function SettingsTab({ initial }: { initial: Settings | null }) {
+  const [s, setS] = useState<Settings>(
+    initial ?? {
+      id: true, overdue_enabled: true, overdue_days: 2,
+      reminder_emails: ['leon@unitlift.com', 'leon.lisinski@gmail.com'],
+      digest_enabled: false, digest_priority_min: 7, digest_emails: ['leon@unitlift.com'],
+      hide_done_after_days: 7,
+    }
+  )
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/notes/settings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Greška'); return }
+      setS(data.data)
+      toast.success('Postavke spremljene')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      {/* Overdue reminder */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <span className="font-semibold text-sm">Podsjetnik za prekoračeni rok</span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <Checkbox checked={s.overdue_enabled} onCheckedChange={(c) => setS((p) => ({ ...p, overdue_enabled: !!c }))} />
+            <span className="text-sm">Pošalji email kad zadatak prekorači rok</span>
+          </label>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Pošalji nakon</span>
+            <Input
+              type="number" min={0} max={365}
+              value={s.overdue_days}
+              onChange={(e) => setS((p) => ({ ...p, overdue_days: Number(e.target.value) }))}
+              className="w-20"
+            />
+            <span className="text-muted-foreground">dana od roka</span>
+          </div>
+          <EmailListEditor
+            label="Primatelji podsjetnika"
+            emails={s.reminder_emails}
+            onChange={(emails) => setS((p) => ({ ...p, reminder_emails: emails }))}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Daily digest */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <span className="font-semibold text-sm">Dnevni pregled zadataka</span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <Checkbox checked={s.digest_enabled} onCheckedChange={(c) => setS((p) => ({ ...p, digest_enabled: !!c }))} />
+            <span className="text-sm">Svako jutro pošalji pregled otvorenih zadataka</span>
+          </label>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Samo prioritet ≥</span>
+            <Input
+              type="number" min={0} max={10}
+              value={s.digest_priority_min}
+              onChange={(e) => setS((p) => ({ ...p, digest_priority_min: Number(e.target.value) }))}
+              className="w-20"
+            />
+          </div>
+          <EmailListEditor
+            label="Primatelji pregleda"
+            emails={s.digest_emails}
+            onChange={(emails) => setS((p) => ({ ...p, digest_emails: emails }))}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Hide completed */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <Check className="w-4 h-4 text-muted-foreground" />
+            <span className="font-semibold text-sm">Sakrivanje završenih</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Završeni zadaci se ne brišu, ali možeš ih sakriti gumbom "Prikaži/Sakrij završene" u tabu Zadaci.</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
+        {saving ? 'Snima...' : 'Spremi postavke'}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Podsjetnici se šalju automatski svako jutro (cron). Provjeri da je <code className="text-foreground/70">CRON_SECRET</code> postavljen u Vercel okruženju.
+      </p>
+    </div>
+  )
+}
+
+function EmailListEditor({ label, emails, onChange }: {
+  label: string; emails: string[]; onChange: (emails: string[]) => void
+}) {
+  const [draft, setDraft] = useState('')
+
+  function add() {
+    const e = draft.trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { toast.error('Neispravan email'); return }
+    if (emails.includes(e)) { setDraft(''); return }
+    onChange([...emails, e])
+    setDraft('')
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {emails.map((e) => (
+          <span key={e} className="text-xs px-2 py-1 rounded-md bg-muted border border-border inline-flex items-center gap-1.5">
+            {e}
+            <button onClick={() => onChange(emails.filter((x) => x !== e))} className="text-muted-foreground hover:text-red-400">
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        {emails.length === 0 && <span className="text-xs text-muted-foreground">Nema primatelja</span>}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder="dodaj@email.com"
+          className="flex-1"
+        />
+        <Button variant="outline" size="sm" onClick={add} type="button">Dodaj</Button>
+      </div>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { hr } from 'date-fns/locale'
 import {
   Search, ChevronRight, ExternalLink, AlertTriangle,
   XCircle, Copy, Check, Lock, Star, CalendarDays, CreditCard,
-  User, TrendingDown, RefreshCw, Clock,
+  User, TrendingDown, RefreshCw, Clock, Trash2, RotateCcw,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,6 +19,7 @@ interface Trainer {
   full_name: string
   email: string
   created_at: string
+  deletion_requested_at: string | null
   plan: string | null
   status: string | null
   current_period_end: string | null
@@ -207,7 +208,14 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
                 >
                   {/* Desktop row */}
                   <div className="hidden md:grid grid-cols-[1.5fr_1.5fr_90px_110px_110px_120px] gap-3 px-4 py-3 items-center text-sm">
-                    <span className="font-medium truncate">{t.full_name}</span>
+                    <span className="font-medium truncate flex items-center gap-2">
+                      {t.full_name}
+                      {t.deletion_requested_at && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1 shrink-0">
+                          <Trash2 className="w-2.5 h-2.5" /> Brisanje
+                        </span>
+                      )}
+                    </span>
                     <span className="text-muted-foreground truncate text-xs">{t.email}</span>
                     <span>
                       {t.plan ? (
@@ -237,6 +245,11 @@ export function TreneriClient({ trainers }: { trainers: Trainer[] }) {
                       <p className="font-medium text-sm truncate">{t.full_name}</p>
                       <p className="text-muted-foreground text-xs truncate">{t.email}</p>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {t.deletion_requested_at && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
+                            <Trash2 className="w-2.5 h-2.5" /> Pending deletion
+                          </span>
+                        )}
                         {t.plan && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${getPlanBadge(t.plan)}`}>
                             {PLAN_LABELS[t.plan] ?? t.plan}
@@ -289,6 +302,22 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
   const ctx = getSubContext(t)
   const price = effectivePrice(t)
   const isAmbassador = t.plan === 'ambassador'
+  const [cancelingDeletion, setCancelingDeletion] = useState(false)
+  const [cancelDeletionDone, setCancelDeletionDone] = useState(false)
+  const [deletionRequestedAt, setDeletionRequestedAt] = useState(t.deletion_requested_at)
+
+  const handleCancelDeletion = async () => {
+    setCancelingDeletion(true)
+    try {
+      const res = await fetch(`/api/trainers/${t.id}/cancel-deletion`, { method: 'POST' })
+      if (res.ok) {
+        setDeletionRequestedAt(null)
+        setCancelDeletionDone(true)
+      }
+    } finally {
+      setCancelingDeletion(false)
+    }
+  }
 
   // Trial progress
   const trialDuration = t.trial_start && t.trial_end
@@ -308,6 +337,34 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
 
   return (
     <div className="flex flex-col h-full" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      {/* ── Deletion pending banner ───────────────────────────── */}
+      {deletionRequestedAt && !cancelDeletionDone && (
+        <div className="px-6 py-3 flex items-center gap-2.5 bg-red-950/60 border-b border-red-800/40">
+          <Trash2 className="w-4 h-4 text-red-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-300">Brisanje računa zatraženo</p>
+            <p className="text-xs text-red-400/80">
+              {format(new Date(deletionRequestedAt), 'd. M. yyyy. HH:mm')} · brisanje za{' '}
+              {Math.max(0, 30 - differenceInDays(now, new Date(deletionRequestedAt)))} dana
+            </p>
+          </div>
+          <button
+            onClick={handleCancelDeletion}
+            disabled={cancelingDeletion}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 transition-colors disabled:opacity-50 shrink-0"
+          >
+            <RotateCcw className="w-3 h-3" />
+            {cancelingDeletion ? '...' : 'Otkaži'}
+          </button>
+        </div>
+      )}
+      {cancelDeletionDone && (
+        <div className="px-6 py-3 flex items-center gap-2.5 bg-emerald-950/40 border-b border-emerald-800/30">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <p className="text-sm text-emerald-300">Brisanje otkazano — račun je reaktiviran</p>
+        </div>
+      )}
+
       {/* ── Status banner ─────────────────────────────────────────── */}
       {(t.status === 'past_due' || t.status === 'locked' || t.cancel_at_period_end) && (
         <div className={`px-6 py-3 flex items-center gap-2.5 text-sm ${
@@ -344,6 +401,11 @@ function TrainerDetail({ trainer: t }: { trainer: Trainer }) {
 
         {/* Badges row */}
         <div className="flex flex-wrap gap-2">
+          {deletionRequestedAt && !cancelDeletionDone && (
+            <span className="text-xs px-2.5 py-1 rounded-full border font-medium bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
+              <Trash2 className="w-3 h-3" /> Pending deletion
+            </span>
+          )}
           {t.plan && (
             <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${getPlanBadge(t.plan)}`}>
               {PLAN_LABELS[t.plan] ?? t.plan}

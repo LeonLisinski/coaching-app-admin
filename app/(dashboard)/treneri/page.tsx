@@ -13,6 +13,7 @@ export default async function TreneriPage() {
       full_name,
       email,
       created_at,
+      deletion_requested_at,
       subscriptions (
         plan,
         status,
@@ -40,6 +41,7 @@ export default async function TreneriPage() {
       full_name: t.full_name ?? '—',
       email: t.email ?? '—',
       created_at: t.created_at,
+      deletion_requested_at: t.deletion_requested_at ?? null,
       plan: sub?.plan ?? null,
       status: sub?.status ?? null,
       current_period_end: sub?.current_period_end ?? null,

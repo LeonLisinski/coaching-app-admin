@@ -5,21 +5,13 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
-
-function getBrowserSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 type Availability = {
   id: string
   day_of_week: number
   start_time: string
   end_time: string
-  slot_duration_minutes: number
+  slot_duration_min: number
 }
 
 type BlockedSlot = {
@@ -48,46 +40,52 @@ export function DostupnostClient({
 
   async function saveNewAvailability() {
     setSaving(true)
-    const db = getBrowserSupabase()
-    const { data, error } = await db.from('demo_availability').insert({
-      day_of_week: parseInt(newRow.day),
-      start_time: newRow.start,
-      end_time: newRow.end,
-      slot_duration_minutes: parseInt(newRow.duration),
-    }).select().single()
+    const res = await fetch('/api/demo-availability', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        day_of_week:       parseInt(newRow.day),
+        start_time:        newRow.start,
+        end_time:          newRow.end,
+        slot_duration_min: parseInt(newRow.duration),
+      }),
+    })
     setSaving(false)
-    if (error) { toast.error('Greška pri dodavanju.'); return }
+    if (!res.ok) { toast.error('Greška pri dodavanju.'); return }
+    const data = await res.json()
     setAvailability(prev => [...prev, data].sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)))
     setNewRow({ day: '1', start: '18:00', end: '21:00', duration: '15' })
     toast.success('Dostupnost dodana.')
   }
 
   async function deleteAvailability(id: string) {
-    const db = getBrowserSupabase()
-    const { error } = await db.from('demo_availability').delete().eq('id', id)
-    if (error) { toast.error('Greška.'); return }
+    const res = await fetch(`/api/demo-availability/${id}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Greška.'); return }
     setAvailability(prev => prev.filter(a => a.id !== id))
     toast.success('Uklonjen.')
   }
 
   async function addBlock() {
     if (!newBlock.date) { toast.error('Datum je obavezan.'); return }
-    const db = getBrowserSupabase()
-    const { data, error } = await db.from('demo_blocked_slots').insert({
-      blocked_date: newBlock.date,
-      blocked_time: newBlock.time || null,
-      reason: newBlock.reason || null,
-    }).select().single()
-    if (error) { toast.error('Greška pri blokiranju.'); return }
+    const res = await fetch('/api/demo-blocked-slots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        blocked_date: newBlock.date,
+        blocked_time: newBlock.time || null,
+        reason:       newBlock.reason || null,
+      }),
+    })
+    if (!res.ok) { toast.error('Greška pri blokiranju.'); return }
+    const data = await res.json()
     setBlocked(prev => [data, ...prev])
     setNewBlock({ date: '', time: '', reason: '' })
     toast.success('Termin blokiran.')
   }
 
   async function deleteBlock(id: string) {
-    const db = getBrowserSupabase()
-    const { error } = await db.from('demo_blocked_slots').delete().eq('id', id)
-    if (error) { toast.error('Greška.'); return }
+    const res = await fetch(`/api/demo-blocked-slots/${id}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Greška.'); return }
     setBlocked(prev => prev.filter(b => b.id !== id))
     toast.success('Blokada uklonjena.')
   }
@@ -118,7 +116,7 @@ export function DostupnostClient({
                     <span className="text-muted-foreground text-sm ml-3">
                       {a.start_time.slice(0, 5)} – {a.end_time.slice(0, 5)}
                     </span>
-                    <span className="text-xs text-muted-foreground/70 ml-2">({a.slot_duration_minutes} min)</span>
+                    <span className="text-xs text-muted-foreground/70 ml-2">({a.slot_duration_min} min)</span>
                   </div>
                   <Button
                     variant="ghost" size="sm"

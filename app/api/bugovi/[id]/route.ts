@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { createClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Verify the caller is an authenticated admin
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { id } = await params
 
   const { status } = await req.json()
   const allowed = ['otvoren', 'u_radu', 'riješen']

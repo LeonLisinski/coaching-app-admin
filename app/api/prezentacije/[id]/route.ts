@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/admin-auth'
 import { Resend } from 'resend'
 
 const resend  = new Resend(process.env.RESEND_API_KEY)
@@ -25,6 +26,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
   const { action, adminNote } = await req.json()
 
@@ -129,6 +132,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
   const db = createAdminClient()
 

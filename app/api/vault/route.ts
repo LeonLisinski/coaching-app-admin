@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/admin-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('admin_vault')
@@ -13,6 +16,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = createAdminClient()
   const body = await req.json()
   const { data, error } = await supabase
@@ -25,6 +30,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = createAdminClient()
   const body = await req.json()
   const { id, ...rest } = body
@@ -39,6 +46,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = createAdminClient()
   const { id } = await req.json()
   const { error } = await supabase.from('admin_vault').delete().eq('id', id)

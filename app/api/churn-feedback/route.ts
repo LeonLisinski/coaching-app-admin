@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/admin-auth'
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { trainer_id, reason, note } = await req.json()
 
   if (!trainer_id || !reason) {

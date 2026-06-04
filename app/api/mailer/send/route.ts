@@ -1,9 +1,12 @@
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/admin-auth'
 import { buildEmailHtml } from '@/lib/email-template'
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
 export async function POST(request: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { segment, subject, body } = await request.json()
 

@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/admin-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const segment = request.nextUrl.searchParams.get('segment') ?? 'all'
   const supabase = createAdminClient()
 
